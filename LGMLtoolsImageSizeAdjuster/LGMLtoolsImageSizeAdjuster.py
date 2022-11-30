@@ -7,6 +7,23 @@ from typing import List, Tuple, Any, ClassVar, Literal, Callable, Union
 
 
 TARGET_FORMATS: Tuple[str] = ("png", "jpg", "gif", "bmp", "tga", "tif")
+PREFERRED_DIRECTIONS: Tuple[str] = ("width", "height", "auto", "auto_clip")
+
+
+class ProcessInfo:
+    width: int
+    height: int
+    image: Image
+    output_path: Path
+    force: bool = False
+    preferred_direction: str
+    padding: bool
+    padding_color: int
+    scaling: bool
+
+    @property
+    def is_output_dir(self) -> bool:
+        return self.output_path.is_dir()
 
 
 def _open_image(file_path: Path, extensions: List[str]) -> Union[Image, None]:
@@ -39,6 +56,10 @@ def _open_image(file_path: Path, extensions: List[str]) -> Union[Image, None]:
     return None
 
 
+def _process_image(info: ProcessInfo):
+    pass
+
+
 def _resize_by_width(file: Path, img: Image, w: int) -> Image:
     """
     横幅のサイズ優先でサイズ変更を行う
@@ -60,7 +81,7 @@ def _resize_by_height(file: Path, img: Image, h: int) -> Image:
     return img
 
 
-def main():
+def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         usage='画像のサイズを適切に調整する。',
         description='画像の縦横サイズを指定のサイズに変更する。'
@@ -76,7 +97,7 @@ def main():
                         help="処理結果ファイル保存時に同盟ファイルが存在していても確認をしない場合に指定。")
     parser.add_argument(
         "-prdir", "--preferred_direction", default="height",
-        choices=["width", "height", "auto", "auto_clip"],
+        choices=PREFERRED_DIRECTIONS,
         help="\n".join([
             "リサイズ後に縦横比が合わない場合の優先方向指定。", 
             "auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。",
@@ -143,7 +164,18 @@ def main():
         sys.exit(1)
 
     for image in image_files:
-        pass
+        info: ProcessInfo = ProcessInfo()
+        info.width = args.width
+        info.height = args.height
+        info.image = image
+        info.output_path = output_path
+        info.force = args.force
+        info.preferred_direction = args.preferred_direction
+        info.padding = args.padding
+        info.padding_color = int('0x' + args.padding_color)
+        info.scaling = args.scaling
+
+        _process_image(info)
 
 
 if __name__ == "__main__":
