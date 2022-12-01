@@ -7,23 +7,43 @@ from typing import List, Tuple, Any, ClassVar, Literal, Callable, Union
 
 
 TARGET_FORMATS: Tuple[str] = ("png", "jpg", "gif", "bmp", "tga", "tif")
-PREFERRED_DIRECTIONS: Tuple[str] = ("width", "height", "auto", "auto_clip")
+
+
+class PreferredDirections:
+
+    WIDTH: str = "width"
+    HEIGHT: str = "height"
+    AUTO: str = "auto"
+    AUTO_CLIP: str = "auto_clip"
+
+    @staticmethod
+    def get_all(self) -> List[str]:
+        return [self.WIDTH, self.HEIGHT, self.AUTO, self.AUTO_CLIPs]
 
 
 class ProcessInfo:
+    file_name: str
     width: int
     height: int
     image: Image
-    output_path: Path
-    force: bool = False
+    # output_path: Path
+    # force: bool = False
     preferred_direction: str
     padding: bool
     padding_color: int
     scaling: bool
 
+    def __int__(self, image:Image, file_name: str):
+        self.image = image
+        self.file_name = file_name
+
+    # @property
+    # def is_output_dir(self) -> bool:
+    #     return self.output_path.is_dir()
+
     @property
-    def is_output_dir(self) -> bool:
-        return self.output_path.is_dir()
+    def ratio(self) -> float:
+        return self.width / self.height
 
 
 def _open_image(file_path: Path, extensions: List[str]) -> Union[Image, None]:
@@ -56,29 +76,73 @@ def _open_image(file_path: Path, extensions: List[str]) -> Union[Image, None]:
     return None
 
 
-def _process_image(info: ProcessInfo):
-    pass
-
-
-def _resize_by_width(file: Path, img: Image, w: int) -> Image:
+def _resize_by_width(info: ProcessInfo) -> Image:
     """
     横幅のサイズ優先でサイズ変更を行う
     """
-    ratio: float = w / img.width
-    size: Tuple = (img.width, img.height)
-    resize: Tuple = (w, int(img.height * ratio))
-    print("resize {}: {} -> {}".format(file.name, size, resize))
-    img: Image = img.resize(resize, Image.Resampling.NEAREST)
+    ratio: float = info.width / info.image.width
+    size: Tuple = (info.image.width, info.image.height)
+    resize: Tuple = (info.width, int(info.image.height * ratio))
+    img: Image = info.image.resize(resize, Image.Resampling.NEAREST)
+    print("resize {}: {} -> {}".format(info.file_name, size, resize))
     return img
 
 
-def _resize_by_height(file: Path, img: Image, h: int) -> Image:
-    ratio: float = h / img.height
-    size: Tuple = (img.width, img.height)
-    resize: Tuple = (int(img.width * ratio), h)
-    print("resize {}: {} -> {}".format(file.name, size, resize))
-    img: Image = img.resize(resize, Image.Resampling.NEAREST)
+def _resize_by_height(info: ProcessInfo) -> Image:
+    """
+    縦幅のサイズ優先でサイズ変更を行う
+    """
+    ratio: float = info.height / info.image.height
+    size: Tuple = (info.image.width, info.image.height)
+    resize: Tuple = (int(info.image.width * ratio), info.height)
+    img: Image = info.image.resize(resize, Image.Resampling.NEAREST)
+    print("resize {}: {} -> {}".format(info.file_name, size, resize))
     return img
+
+
+def _resize_image(info: ProcessInfo) -> Image:
+    pd: str = info.preferred_direction
+    image: Image
+    image_by_width: Image
+    image_by_height: Image
+    ratio_w: float
+    ratio_h: float
+    if pd != PreferredDirections.HEIGHT:
+        image_by_width = _resize_by_width(info)
+    if pd != PreferredDirections.WIDTH:
+        image_by_height = _resize_by_width(info)
+
+    if pd == PreferredDirections.WIDTH:
+        return image_by_width
+    if pd == PreferredDirections.HEIGHT:
+        return image_by_height
+
+    ratio_w: float = image_by_width.width / image_by_width.height
+    ratio_h: float = image_by_height.width / image_by_height.height
+    size_w: float = image_by_width.width * image_by_width.height
+    size_h: float = image_by_height.width * image_by_height.height
+    xx: int
+    yy: int
+    if pd == PreferredDirections.AUTO_CLIP:
+        if size_w > size_h:
+            image = image_by_width
+        else:
+            image = image_by_height
+        xx = int((info.width - image.width) / 2)
+        yy = int((info.height - image.height) / 2)
+        image.crop((xx, yy, xx + info.width, info.height))
+    elif pd == PreferredDirections.AUTO:
+        if size_w > size_h:
+            image = image_by_height
+        else:
+            image = image_by_width
+        xx = int((info.width - image.width) / 2)
+        yy = int((info.height - image.height) / 2)
+        if info.padding_color and image.width * image.height < info.width * info.height:
+            new_image: Image = Image.new(mode="RGBA", size=(info.width, image.height), color=info.padding_color)
+            new_image.paste(image, (xx, yy))
+            image = new_image
+    return image
 
 
 def main() -> None:
@@ -94,10 +158,10 @@ def main() -> None:
     parser.add_argument("-o", "--output", type=str, default="",
                         help="アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。")
     parser.add_argument("-f", "--force", action="store_true",
-                        help="処理結果ファイル保存時に同盟ファイルが存在していても確認をしない場合に指定。")
+                        help="処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。")
     parser.add_argument(
         "-prdir", "--preferred_direction", default="height",
-        choices=PREFERRED_DIRECTIONS,
+        choices=PreferredDirections.get_all(),
         help="\n".join([
             "リサイズ後に縦横比が合わない場合の優先方向指定。", 
             "auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。",
@@ -132,7 +196,8 @@ def main() -> None:
         output_path = Path(image_file_path)
     else:
         output_path = Path(args.output)
-    image_files: List[Image] = []
+    image_file_infos: List[ProcessInfo] = []
+    force: bool = args.force
 
     is_target_dir: bool = image_file_path.is_dir()
     is_output_dir: bool = output_path.is_dir()
@@ -141,6 +206,7 @@ def main() -> None:
         sys.exit(1)
 
     # 処理対象のImage一覧を作る
+    image: Image
     if is_target_dir:
         # もし読み込み指定がディレクトリなら画像ぽい物を探す
         for f in os.listdir(image_file_path):
@@ -149,13 +215,15 @@ def main() -> None:
                 continue
             if ext[1:] not in TARGET_FORMATS:
                 continue
-            image_files.append(_open_image(image_file_path, other_formats))
+            image = _open_image(image_file_path, other_formats)
+            if image:
+                image_file_infos.append(ProcessInfo(image, image_file_path.name))
     else:
-        image_files.append(_open_image(image_file_path, other_formats))
-    image: Image
-    image_files = [image for image in image_files if image is not None]
+        image = _open_image(image_file_path, other_formats)
+        if image:
+            image_file_infos.append(image, image_file_path.name)
 
-    if len(image_files) == 0:
+    if len(image_file_infos) == 0:
         print("no image input: {}{}".format(
                 image_file_path.as_posix(),
                 " ({})".format(" | ".join(other_formats)) if len(other_formats) > 0 else ""
@@ -163,19 +231,28 @@ def main() -> None:
             file=sys.stderr)
         sys.exit(1)
 
-    for image in image_files:
-        info: ProcessInfo = ProcessInfo()
+    for info in image_file_infos:
         info.width = args.width
         info.height = args.height
         info.image = image
-        info.output_path = output_path
-        info.force = args.force
+        # info.output_path = output_path
+        # info.force = args.force
         info.preferred_direction = args.preferred_direction
         info.padding = args.padding
         info.padding_color = int('0x' + args.padding_color)
         info.scaling = args.scaling
 
-        _process_image(info)
+        image = _resize_image(info)
+        output_file_path: Path
+        if is_output_dir:
+            output_file_path = output_path / Path(info.file_name)
+        else:
+            output_file_path = output_path
+        if output_file_path.exists() and not args.force:
+            r: str = input("上書き確認 y/n")
+            if r.lower() != "y":
+                continue
+        print(output_file_path)  # TODO 書き出し
 
 
 if __name__ == "__main__":
