@@ -18,7 +18,8 @@ def main() -> None:
     parser.add_argument("-s", "--suffix", default="", type=str, help="出力画像名の接尾語")
     parser.add_argument("-fmt", "--format", default="png", help="エクスポート画像フォーマットの指定")
     parser.add_argument("-c", "--color", type=str, default="eeeeee", help="色の指定(16進数6文字)")
-    parser.add_argument("-t", "--title", type=str, default="[DUMMY IMAGE]", help="画像に埋め込むタイトル文字 英語のみ")
+    parser.add_argument("-t", "--title", type=str, default="[DUMMY IMAGE]\n{w}x{h}",
+                        help="画像に埋め込むタイトル文字 英語のみ {w}は横幅に{h}は縦幅に変換される")
     parser.add_argument("--text_contents", type=str, default="", help="画像右下に埋め込む本文文字 英語のみ")
     parser.add_argument("--force", action="store_true", help="上書き確認せずファイルを書き出すか")
     # デフォルトビットマップフォントがかっこいいが、サイズ指定できない
@@ -42,6 +43,7 @@ def main() -> None:
     color: tuple[int, int, int] = \
         (int(color_str[4:6], base=16), int(color_str[2:4], base=16), int(color_str[0:2], base=16))  # BGR -> RGB
     text_color: tuple[int, int, int] = (255 - color[0], 255 - color[1], 255 - color[2])  # 補色
+    line_color: tuple[int, int, int] = text_color
     font: ImageFont = ImageFont.load_default()
     # font = ImageFont.truetype("arial.ttf", args.font_size)
 
@@ -52,17 +54,22 @@ def main() -> None:
     for index in range(args.number_of_image):
         image: Image = Image.new("RGB", small_size, color)
         draw = ImageDraw.Draw(image)
-        draw.rectangle((2, 2, small_size[0] - 2 - 1, small_size[1] - 2 - 1), outline=text_color, width=1)
+        xx: int = small_size[0] - 2 - 1
+        yy: int = small_size[1] - 2 - 1
+        draw.rectangle((2, 2, xx, yy), outline=text_color, width=1)
+        # draw.line(((2, 2), (xx, yy)), fill=line_color)
+        draw.line(((2, yy), (xx, 2)), fill=line_color)
+        title: str = args.title.replace("{w}", str(size[0])).replace("{h}", str(size[1])).replace("\\n", "\n")
         draw.text(
-            (6, 6), "{}\n{}x{}".format(args.title, size[0], size[1]),
+            (6, 6), "{}".format(title, size[0], size[1]),
             text_color, spacing=3, align='left', font=font
         )
         text_contents: str = args.text_contents
         # print(text_contents)
-        text_contents_size = font.getsize(text_contents)
+        text_contents_size = font.getbbox(text_contents)
         # print(text_contents_size)
         draw.text(
-            (small_size[0] - text_contents_size[0] - 6, small_size[1] - text_contents_size[1] - 6),
+            (small_size[0] - text_contents_size[2] - 6, small_size[1] - text_contents_size[3] - 6),
             text_contents, text_color
         )
         # 小さく作って拡大している 文字の見栄えの調整

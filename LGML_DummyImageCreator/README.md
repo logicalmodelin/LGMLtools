@@ -58,8 +58,8 @@ optional arguments:
 コマンド例
 
 * `py LGML_DummyImageCreator.py work 128 128 -n 2 --force -c ffffCC -fmt jpg`
-* `py LGML_DummyImageCreator.py work 640 427 -n 1 --force -c eeeedd -t HOGE -p title_ -s _pics`
-* `py LGML_DummyImageCreator.py work 1280 720 --force -c eeeeee -t "[HD SIZE]" -p hd_ --text_contents "Can you can a can as a canner can can a can?"`
+* `py LGML_DummyImageCreator.py work 640 427 --force -c eeffff -t "[DUMMY IMAGE CREATOR]\n{w}px / {h}px" -p header_ --text_contents "Creates dummy images easily."`
+* `py LGML_DummyImageCreator.py work 1280 720 --force -c eeeeee -t "[HD SIZE]" -p hd_ --text_contents "A snake sneaks to seek a snack."`
 
 
 
