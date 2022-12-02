@@ -16,7 +16,7 @@ Pillowが必要です。Python3のいくつかで動きます。
 
 * タイトル文字指定可能
 * 背景色指定可能
-* 文字色は背景色の補色に
+* 指定ない場合、文字色は背景色の補色に
 * 右下に追加文字指定可能
 
 外部フォント読み込みたくないので以下の制限があります。
@@ -57,6 +57,7 @@ optional arguments:
 
 コマンド例
 
+* `py LGML_DummyImageCreator.py work 720 360 -t "Hi there," --force -c 000066 -tc 555555 --text_contents "How do you do today?"`
 * `py LGML_DummyImageCreator.py work 128 128 -n 2 --force -c ffffCC -fmt jpg`
 * `py LGML_DummyImageCreator.py work 640 427 --force -c eeffff -t "[DUMMY IMAGE CREATOR]\n{w}px / {h}px" -p header_ --text_contents "Creates dummy images easily."`
 * `py LGML_DummyImageCreator.py work 1280 720 --force -c eeeeee -t "[HD SIZE]" -p hd_ --text_contents "A snake sneaks to seek a snack."`

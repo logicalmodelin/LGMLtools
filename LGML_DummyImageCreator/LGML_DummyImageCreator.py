@@ -18,6 +18,8 @@ def main() -> None:
     parser.add_argument("-s", "--suffix", default="", type=str, help="出力画像名の接尾語")
     parser.add_argument("-fmt", "--format", default="png", help="エクスポート画像フォーマットの指定")
     parser.add_argument("-c", "--color", type=str, default="eeeeee", help="色の指定(16進数6文字)")
+    parser.add_argument("-tc", "--text_color", type=str, default="",
+                        help="文字色の指定(16進数6文字) 指定ない場合背景色の補色")
     parser.add_argument("-t", "--title", type=str, default="[DUMMY IMAGE]\n{w}x{h}",
                         help="画像に埋め込むタイトル文字 英語のみ {w}は横幅に{h}は縦幅に変換される")
     parser.add_argument("--text_contents", type=str, default="", help="画像右下に埋め込む本文文字 英語のみ")
@@ -35,14 +37,21 @@ def main() -> None:
     size: Tuple[int, int] = (args.width, args.height)
     filename_template: str = args.prefix + "{}x{}" + args.suffix + "{}." + args.format
     color_str: str = args.color
-    if color_str.startswith("0x"):
-        color_str = color_str[2:]
     if len(color_str) != 6:
         print("カラーはRRGGBB形式の16進数6文字(例 ffeeee)で指定してください。", file=sys.stderr)
         sys.exit(1)
     color: tuple[int, int, int] = \
-        (int(color_str[4:6], base=16), int(color_str[2:4], base=16), int(color_str[0:2], base=16))  # BGR -> RGB
-    text_color: tuple[int, int, int] = (255 - color[0], 255 - color[1], 255 - color[2])  # 補色
+        (int(color_str[0:2], base=16), int(color_str[2:4], base=16), int(color_str[4:6], base=16))
+    text_color_str: str = args.text_color
+    if len(text_color_str) != 6 and len(text_color_str) != 0:
+        print("textカラーはRRGGBB形式の16進数6文字(例 ffeeee)で指定してください。", file=sys.stderr)
+        sys.exit(1)
+    text_color: tuple[int, int, int]
+    if text_color_str == "":
+        text_color = (255 - color[0], 255 - color[1], 255 - color[2])  # 補色
+    else:
+        text_color = \
+            (int(text_color_str[0:2], base=16), int(text_color_str[2:4], base=16), int(text_color_str[4:6], base=16))
     line_color: tuple[int, int, int] = text_color
     font: ImageFont = ImageFont.load_default()
     # font = ImageFont.truetype("arial.ttf", args.font_size)
