@@ -16,9 +16,9 @@ class PreferredDirections:
     AUTO: str = "auto"
     AUTO_CLIP: str = "auto_clip"
 
-    @staticmethod
-    def get_all(self) -> List[str]:
-        return [self.WIDTH, self.HEIGHT, self.AUTO, self.AUTO_CLIPs]
+    @classmethod
+    def get_all(cls) -> List[str]:
+        return [cls.WIDTH, cls.HEIGHT, cls.AUTO, cls.AUTO_CLIP]
 
 
 class ProcessInfo:
@@ -33,7 +33,7 @@ class ProcessInfo:
     padding_color: int
     scaling: bool
 
-    def __int__(self, image:Image, file_name: str):
+    def __init__(self, image: Image, file_name: str):
         self.image = image
         self.file_name = file_name
 
@@ -46,7 +46,7 @@ class ProcessInfo:
         return self.width / self.height
 
 
-def _open_image(file_path: Path, extensions: List[str]) -> Union[Image, None]:
+def _open_image(file_path: Path, extensions: List[str]) -> Image:
     """
     画像ファイルを開く。対象ファイルがなかったら同じファイル名で拡張子だけ違うものを探して開く。
     Args:
@@ -145,6 +145,76 @@ def _resize_image(info: ProcessInfo) -> Image:
     return image
 
 
+def process_args(args: Any) -> None:
+
+    other_formats: List[str] = []
+    if args.search_other_format:
+        other_formats = args.other_formats
+    image_file_path: Path = Path(args.image_file)
+    output_path: Path
+    if not args.output:
+        output_path = Path(image_file_path)
+    else:
+        output_path = Path(args.output)
+    image_file_infos: List[ProcessInfo] = []
+    force: bool = args.force
+
+    is_target_dir: bool = image_file_path.is_dir()
+    is_output_dir: bool = output_path.is_dir()
+    if is_target_dir and not is_output_dir:
+        print("読み込み対象がディレクトリの場合は出力先もディレクトリにする必要があります。", file=sys.stderr)
+        sys.exit(1)
+
+    # 処理対象のImage一覧を作る
+    image: Image
+    if is_target_dir:
+        # もし読み込み指定がディレクトリなら画像ぽい物を探す
+        for f in os.listdir(image_file_path):
+            ext: str = os.path.splitext(f)
+            if not ext:
+                continue
+            if ext[1:] not in TARGET_FORMATS:
+                continue
+            image = _open_image(image_file_path, other_formats)
+            if image:
+                image_file_infos.append(ProcessInfo(image, image_file_path.name))
+    else:
+        image = _open_image(image_file_path, other_formats)
+        if image:
+            image_file_infos.append(ProcessInfo(image, image_file_path.name))
+
+    if len(image_file_infos) == 0:
+        print("no image input: {}{}".format(
+                image_file_path.as_posix(),
+                " ({})".format(" | ".join(other_formats)) if len(other_formats) > 0 else ""
+            ),
+            file=sys.stderr)
+        sys.exit(1)
+
+    for info in image_file_infos:
+        info.width = args.width
+        info.height = args.height
+        info.image = image
+        # info.output_path = output_path
+        # info.force = args.force
+        info.preferred_direction = args.preferred_direction
+        info.padding = args.padding
+        info.padding_color = int('0x' + args.padding_color, 16)
+        info.scaling = args.scaling
+
+        image = _resize_image(info)
+        output_file_path: Path
+        if is_output_dir:
+            output_file_path = output_path / Path(info.file_name)
+        else:
+            output_file_path = output_path
+        if output_file_path.exists() and not args.force:
+            r: str = input("上書き確認 y/n")
+            if r.lower() != "y":
+                continue
+        print(output_file_path)  # TODO 書き出し
+
+
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         usage='画像のサイズを適切に調整する。',
@@ -186,73 +256,7 @@ def main() -> None:
         help="異なるファイルフォーマットのファイル名を自動検索する場合の優先度。"
              "入力がディレクトリの場合は無効。")
     args: argparse.Namespace = parser.parse_args()
-
-    other_formats: List[str] = []
-    if args.search_other_format:
-        other_formats = args.other_formats
-    image_file_path: Path = Path(args.image_file)
-    output_path: Path
-    if not args.output:
-        output_path = Path(image_file_path)
-    else:
-        output_path = Path(args.output)
-    image_file_infos: List[ProcessInfo] = []
-    force: bool = args.force
-
-    is_target_dir: bool = image_file_path.is_dir()
-    is_output_dir: bool = output_path.is_dir()
-    if is_target_dir and not is_output_dir:
-        print("読み込み対象がディレクトリの場合は出力先もディレクトリにする必要があります。", file=sys.stderr)
-        sys.exit(1)
-
-    # 処理対象のImage一覧を作る
-    image: Image
-    if is_target_dir:
-        # もし読み込み指定がディレクトリなら画像ぽい物を探す
-        for f in os.listdir(image_file_path):
-            ext: str = os.path.splitext(f)
-            if not ext:
-                continue
-            if ext[1:] not in TARGET_FORMATS:
-                continue
-            image = _open_image(image_file_path, other_formats)
-            if image:
-                image_file_infos.append(ProcessInfo(image, image_file_path.name))
-    else:
-        image = _open_image(image_file_path, other_formats)
-        if image:
-            image_file_infos.append(image, image_file_path.name)
-
-    if len(image_file_infos) == 0:
-        print("no image input: {}{}".format(
-                image_file_path.as_posix(),
-                " ({})".format(" | ".join(other_formats)) if len(other_formats) > 0 else ""
-            ),
-            file=sys.stderr)
-        sys.exit(1)
-
-    for info in image_file_infos:
-        info.width = args.width
-        info.height = args.height
-        info.image = image
-        # info.output_path = output_path
-        # info.force = args.force
-        info.preferred_direction = args.preferred_direction
-        info.padding = args.padding
-        info.padding_color = int('0x' + args.padding_color)
-        info.scaling = args.scaling
-
-        image = _resize_image(info)
-        output_file_path: Path
-        if is_output_dir:
-            output_file_path = output_path / Path(info.file_name)
-        else:
-            output_file_path = output_path
-        if output_file_path.exists() and not args.force:
-            r: str = input("上書き確認 y/n")
-            if r.lower() != "y":
-                continue
-        print(output_file_path)  # TODO 書き出し
+    process_args(args)
 
 
 if __name__ == "__main__":
