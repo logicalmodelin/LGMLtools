@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -22,7 +23,7 @@ class PreferredDirections:
 
 
 class ProcessInfo:
-    file_name: str
+    source_file_name: str
     width: int
     height: int
     image: Image
@@ -32,10 +33,16 @@ class ProcessInfo:
     padding: bool
     padding_color: int
     scaling: bool
+    source_pixel_ratio: float
+    source_width: int
+    source_height: int
 
     def __init__(self, image: Image, file_name: str):
         self.image = image
-        self.file_name = file_name
+        self.source_file_name = file_name
+        self.source_width = image.width
+        self.source_height = image.height
+        self.source_pixel_ratio = image.width / image.height
 
     # @property
     # def is_output_dir(self) -> bool:
@@ -76,7 +83,7 @@ def _open_image(file_path: Path, extensions: List[str]) -> Image:
     return None
 
 
-def _resize_by_width(info: ProcessInfo) -> Image:
+def _resize_by_width(info: ProcessInfo, nolog=True) -> Image:
     """
     横幅のサイズ優先でサイズ変更を行う
     """
@@ -84,11 +91,12 @@ def _resize_by_width(info: ProcessInfo) -> Image:
     size: Tuple = (info.image.width, info.image.height)
     resize: Tuple = (info.width, int(info.image.height * ratio))
     img: Image = info.image.resize(resize, Image.Resampling.NEAREST)
-    print("resize {}: {} -> {}".format(info.file_name, size, resize))
+    if not nolog:
+        print("resize {}: {} -> {}".format(info.source_file_name, size, resize))
     return img
 
 
-def _resize_by_height(info: ProcessInfo) -> Image:
+def _resize_by_height(info: ProcessInfo, nolog=True) -> Image:
     """
     縦幅のサイズ優先でサイズ変更を行う
     """
@@ -96,7 +104,8 @@ def _resize_by_height(info: ProcessInfo) -> Image:
     size: Tuple = (info.image.width, info.image.height)
     resize: Tuple = (int(info.image.width * ratio), info.height)
     img: Image = info.image.resize(resize, Image.Resampling.NEAREST)
-    print("resize {}: {} -> {}".format(info.file_name, size, resize))
+    if not nolog:
+        print("resize {}: {} -> {}".format(info.source_file_name, size, resize))
     return img
 
 
@@ -205,21 +214,44 @@ def process_args(args: Any) -> None:
         image = _resize_image(info)
         output_file_path: Path
         if is_output_dir:
-            output_file_path = output_path / Path(info.file_name)
+            output_file_path = output_path / Path(info.source_file_name)
         else:
             output_file_path = output_path
-        if output_file_path.exists() and not args.force:
+        if output_file_path.exists() and not args.force and not args.result_as_json:
             r: str = input("上書き確認 y/n")
             if r.lower() != "y":
                 continue
-        print(output_file_path)  # TODO 書き出し
+        if args.result_as_json:
+            o: dict = {
+                "result": {
+                    "output_file_path": output_file_path.as_posix(),
+                    "width": image.width,
+                    "height": image.height,
+                    "pixel_ratio": image.width / image.height,
+                },
+                "params": {
+                    "preferred_direction": info.preferred_direction,
+                    "padding": info.padding,
+                    "padding_color": hex(info.padding_color),
+                    "scaling": info.scaling,
+                },
+                "source": {
+                    "file_name": info.source_file_name,
+                    "width": info.source_width,
+                    "height": info.source_height,
+                    "pixel_ratio": info.source_pixel_ratio,
+                },
+            }
+            json_str: str = json.dumps(o, allow_nan=True)
+            print(json_str, file=sys.stdout)
+        else:
+            print(output_file_path)  # TODO 書き出し
 
 
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        usage='画像のサイズを適切に調整する。',
-        description='画像の縦横サイズを指定のサイズに変更する。'
-                    'jpgとpngなどフォーマットの違いを調整する。'
+        description='画像のサイズを適切に調整する。'
+                    'jpgとpngなどフォーマットの違いを修正する。'
                     'ディレクトリを指定するとその中のすべてのファイルを処理対象にする。',
     )
     parser.add_argument("image_file", type=str, help="処理対象となる画像ファイルのパス。")
@@ -255,6 +287,10 @@ def main() -> None:
         "-ofmt", "--other_formats", nargs="*", type=str, default=TARGET_FORMATS,
         help="異なるファイルフォーマットのファイル名を自動検索する場合の優先度。"
              "入力がディレクトリの場合は無効。")
+    parser.add_argument(
+        "--result_as_json", action="store_true",
+        help="開発用コマンド、実際に画像を出力せずjsonデータで概要を標準出力する。")
+    parser.add_argument("-V", '--version', action='version', version='%(prog)s 1.0')
     args: argparse.Namespace = parser.parse_args()
     process_args(args)
 
@@ -262,3 +298,30 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
+"""
+画像のサイズを適切に調整する。。jpgとpngなどフォーマットの違いを修正する。ディレクトリを指定するとその中のすべてのファイルを処理対象にする。
+
+positional arguments:
+  image_file            処理対象となる画像ファイルのパス。
+  width                 出力画像の横幅。
+  height                出力画像の高さ。
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -o OUTPUT, --output OUTPUT
+                        アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。
+  -f, --force           処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。
+  -prdir {width,height,auto,auto_clip}, --preferred_direction {width,height,auto,auto_clip}
+                        リサイズ後に縦横比が合わない場合の優先方向指定。 auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。 auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。 実際にクリップ・パディングするしないは別オプショ 
+ンで指定する。
+  --padding             パディング(余白埋め)を許可する場合に指定。
+  --padding_color PADDING_COLOR
+                        パディング色をRGBA値16進数8桁で指定。透明度は出力フォーマットがjpgの場合無視される。
+  --scaling             サイズがあわない場合にスケーリングをしたい場合に指定。padding指定がある場合はpaddingを優先。
+  -sofmt, --search_other_format
+                        指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。
+  -ofmt [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
+                        異なるファイルフォーマットのファイル名を自動検索する場合の優先度。入力がディレクトリの場合は無効。
+  --result_as_json      開発用コマンド、実際に画像を出力せずjsonデータで概要を標準出力する。
+  -V, --version         show program's version number and exit
+"""

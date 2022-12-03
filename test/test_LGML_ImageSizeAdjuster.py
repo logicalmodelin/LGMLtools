@@ -1,9 +1,17 @@
+import json
 import subprocess
 import os
 import sys
 from pathlib import Path
 from PIL import Image
 from typing import List, Tuple, Any, ClassVar, Literal, Callable, Union
+
+
+def _print_result(o: dict) -> None:
+    for k1, v1 in o.items():
+        print("[{}]".format(k1))
+        for k2, v2 in v1.items():
+            print("\t{}: {}".format(k2, v2))
 
 
 def main():
@@ -17,14 +25,17 @@ def main():
         "py",
         tool_path.as_posix(),
         image_file.as_posix(),
-        "100",
+        "540",
         "50",
         "-o",
         "work",
+        "--result_as_json",
     ]
-    print(" ".join(commands))
-    result = subprocess.run(commands)
-    print(result)
+    # print(" ".join(commands))
+    # result: subprocess.CompletedProcess = subprocess.run(commands)
+    result = subprocess.run(commands, stdout=subprocess.PIPE).stdout.decode()
+    o: dict = json.loads(result)
+    _print_result(o)
 
 
 if __name__ == "__main__":
