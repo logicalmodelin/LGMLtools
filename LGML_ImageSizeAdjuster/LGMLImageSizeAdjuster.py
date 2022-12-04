@@ -366,7 +366,14 @@ if __name__ == "__main__":
     main()
 
 """
-画像のサイズを適切に調整する。。jpgとpngなどフォーマットの違いを修正する。ディレクトリを指定するとその中のすべてのファイルを処理対象にする。
+usage: LGMLImageSizeAdjuster.py [-h] [-o OUTPUT] [-f] [-prdir {width,height,auto,auto_clip}]
+                                [-rs {nearest,box,bilinear,hamming,bicubic,lanczos}]
+                                [--padding] [--padding_color PADDING_COLOR]
+                                [--scaling] [-sofmt] [-ofmt [OTHER_FORMATS ...]] [--dev__result_as_json]
+                                [--dev__no_image_output] [--dev__filename_with_input_params] [-V]
+                                image_file width height
+
+画像のサイズを適切に調整する。jpgとpngなどフォーマットの違いを修正する。ディレクトリを指定するとその中のすべてのファイルを処理対象にする。
 
 positional arguments:
   image_file            処理対象となる画像ファイルのパス。
@@ -379,8 +386,12 @@ optional arguments:
                         アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。
   -f, --force           処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。
   -prdir {width,height,auto,auto_clip}, --preferred_direction {width,height,auto,auto_clip}
-                        リサイズ後に縦横比が合わない場合の優先方向指定。 auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。 auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。 実際にクリップ・パディングするしないは別オプショ 
-ンで指定する。
+                        リサイズ後に縦横比が合わない場合の優先方向指定。 
+                        auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。
+                        auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。
+                        実際にクリップ・パディングするしないは別オプションで指定する。
+  -rs {nearest,box,bilinear,hamming,bicubic,lanczos}, --resampling {nearest,box,bilinear,hamming,bicubic,lanczos}
+                        リサイズ時のピクセル補完方法。
   --padding             パディング(余白埋め)を許可する場合に指定。
   --padding_color PADDING_COLOR
                         パディング色をRGBA値16進数8桁で指定。透明度は出力フォーマットがjpgの場合無視される。
@@ -389,6 +400,11 @@ optional arguments:
                         指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。
   -ofmt [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
                         異なるファイルフォーマットのファイル名を自動検索する場合の優先度。入力がディレクトリの場合は無効。
-  --dev__result_as_json      開発用コマンド、実際に画像を出力せずjsonデータで概要を標準出力する。
+  --dev__result_as_json
+                        開発用コマンド、jsonデータで処理の概要を標準出力する。
+  --dev__no_image_output
+                        開発用コマンド、画像を出力しない。dev__result_as_jsonと合わせて使う想定。
+  --dev__filename_with_input_params
+                        開発用コマンド、出力ファイル名にパラメータ値を含める。
   -V, --version         show program's version number and exit
 """
