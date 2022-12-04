@@ -217,11 +217,11 @@ def process_args(args: Any) -> None:
             output_file_path = output_path / Path(info.source_file_name)
         else:
             output_file_path = output_path
-        if output_file_path.exists() and not args.force and not args.result_as_json:
+        if output_file_path.exists() and not args.force and not args.dev__result_as_json:
             r: str = input("上書き確認 y/n")
             if r.lower() != "y":
                 continue
-        if args.result_as_json:
+        if args.dev__result_as_json:
             o: dict = {
                 "result": {
                     "output_file_path": output_file_path.as_posix(),
@@ -246,6 +246,8 @@ def process_args(args: Any) -> None:
             print(json_str, file=sys.stdout)
         else:
             print(output_file_path)  # TODO 書き出し
+        if not args.dev__no_image_output:
+            image.save(output_file_path)
 
 
 def main() -> None:
@@ -288,8 +290,11 @@ def main() -> None:
         help="異なるファイルフォーマットのファイル名を自動検索する場合の優先度。"
              "入力がディレクトリの場合は無効。")
     parser.add_argument(
-        "--result_as_json", action="store_true",
-        help="開発用コマンド、実際に画像を出力せずjsonデータで概要を標準出力する。")
+        "--dev__result_as_json", action="store_true",
+        help="開発用コマンド、jsonデータで処理の概要を標準出力する。")
+    parser.add_argument(
+        "--dev__no_image_output", action="store_true",
+        help="開発用コマンド、画像を出力しない。dev__result_as_jsonと合わせて使う想定。")
     parser.add_argument("-V", '--version', action='version', version='%(prog)s 1.0')
     args: argparse.Namespace = parser.parse_args()
     process_args(args)
@@ -322,6 +327,6 @@ optional arguments:
                         指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。
   -ofmt [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
                         異なるファイルフォーマットのファイル名を自動検索する場合の優先度。入力がディレクトリの場合は無効。
-  --result_as_json      開発用コマンド、実際に画像を出力せずjsonデータで概要を標準出力する。
+  --dev__result_as_json      開発用コマンド、実際に画像を出力せずjsonデータで概要を標準出力する。
   -V, --version         show program's version number and exit
 """
