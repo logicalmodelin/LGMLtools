@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 from PIL import Image
-from typing import List, Tuple, Any, ClassVar, Literal, Callable, Union
+from typing import List, Tuple, Any, Dict, ClassVar, Literal, Callable, Union
 
 
 TARGET_FORMATS: Tuple[str] = ("png", "jpg", "gif", "bmp", "tga", "tif")
@@ -22,6 +22,41 @@ class PreferredDirections:
         return [cls.WIDTH, cls.HEIGHT, cls.AUTO, cls.AUTO_CLIP]
 
 
+class Resampling:
+
+    name: str
+    enum: int
+
+    default_name: ClassVar[str] = "bilinear"
+    instances: ClassVar[Dict[str, object]] = {}
+
+    @classmethod
+    def create(cls, name: str, enum: int):
+        o: Resampling = Resampling(name, enum)
+        cls.instances[name] = o
+        return o
+
+    @classmethod
+    def get_all_names(cls) -> List[str]:
+        return cls.instances.keys()
+
+    @classmethod
+    def get_resampling(cls, name: str) -> int:
+        return cls.instances[name].enum
+
+    def __init__(self, name: str, enum: int):
+        self.name = name
+        self.enum = enum
+
+
+Resampling.create("nearest", Image.Resampling.NEAREST)
+Resampling.create("box", Image.Resampling.BOX)
+Resampling.create("bilinear", Image.Resampling.BILINEAR)
+Resampling.create("hamming", Image.Resampling.HAMMING)
+Resampling.create("bicubic", Image.Resampling.BICUBIC)
+Resampling.create("lanczos", Image.Resampling.LANCZOS)
+
+
 class ProcessInfo:
     source_file_name: str
     width: int
@@ -36,13 +71,15 @@ class ProcessInfo:
     source_pixel_ratio: float
     source_width: int
     source_height: int
+    resampling: str
 
-    def __init__(self, image: Image, file_name: str):
+    def __init__(self, image: Image, file_name: str, resampling:str):
         self.image = image
         self.source_file_name = file_name
         self.source_width = image.width
         self.source_height = image.height
         self.source_pixel_ratio = image.width / image.height
+        self.resampling = resampling
 
     # @property
     # def is_output_dir(self) -> bool:
@@ -90,7 +127,7 @@ def _resize_by_width(info: ProcessInfo, nolog=True) -> Image:
     ratio: float = info.width / info.image.width
     size: Tuple = (info.image.width, info.image.height)
     resize: Tuple = (info.width, int(info.image.height * ratio))
-    img: Image = info.image.resize(resize, Image.Resampling.NEAREST)
+    img: Image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
     if not nolog:
         print("resize {}: {} -> {}".format(info.source_file_name, size, resize))
     return img
@@ -103,7 +140,7 @@ def _resize_by_height(info: ProcessInfo, nolog=True) -> Image:
     ratio: float = info.height / info.image.height
     size: Tuple = (info.image.width, info.image.height)
     resize: Tuple = (int(info.image.width * ratio), info.height)
-    img: Image = info.image.resize(resize, Image.Resampling.NEAREST)
+    img: Image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
     if not nolog:
         print("resize {}: {} -> {}".format(info.source_file_name, size, resize))
     return img
@@ -119,7 +156,7 @@ def _resize_image(info: ProcessInfo) -> Image:
     if pd != PreferredDirections.HEIGHT:
         image_by_width = _resize_by_width(info)
     if pd != PreferredDirections.WIDTH:
-        image_by_height = _resize_by_width(info)
+        image_by_height = _resize_by_height(info)
 
     if pd == PreferredDirections.WIDTH:
         return image_by_width
@@ -166,6 +203,7 @@ def process_args(args: Any) -> None:
     else:
         output_path = Path(args.output)
     image_file_infos: List[ProcessInfo] = []
+    filename_with_input_params: bool = args.dev__filename_with_input_params
     force: bool = args.force
 
     is_target_dir: bool = image_file_path.is_dir()
@@ -186,11 +224,11 @@ def process_args(args: Any) -> None:
                 continue
             image = _open_image(image_file_path, other_formats)
             if image:
-                image_file_infos.append(ProcessInfo(image, image_file_path.name))
+                image_file_infos.append(ProcessInfo(image, image_file_path.name, args.resampling))
     else:
         image = _open_image(image_file_path, other_formats)
         if image:
-            image_file_infos.append(ProcessInfo(image, image_file_path.name))
+            image_file_infos.append(ProcessInfo(image, image_file_path.name, args.resampling))
 
     if len(image_file_infos) == 0:
         print("no image input: {}{}".format(
@@ -204,8 +242,6 @@ def process_args(args: Any) -> None:
         info.width = args.width
         info.height = args.height
         info.image = image
-        # info.output_path = output_path
-        # info.force = args.force
         info.preferred_direction = args.preferred_direction
         info.padding = args.padding
         info.padding_color = int('0x' + args.padding_color, 16)
@@ -214,7 +250,24 @@ def process_args(args: Any) -> None:
         image = _resize_image(info)
         output_file_path: Path
         if is_output_dir:
-            output_file_path = output_path / Path(info.source_file_name)
+            output_base_name: str = os.path.splitext(info.source_file_name)[0]
+            if filename_with_input_params:
+                output_base_name += "_"
+                output_base_name += "_{}x{}".format(image.width, image.height)
+                if args.preferred_direction:
+                    output_base_name += "_{}".format(args.preferred_direction)
+                if args.scaling:
+                    output_base_name += "_scaling"
+                if args.padding:
+                    output_base_name += "_padding"
+                if force:
+                    output_base_name += "_force"
+                # if info.resampling != Resampling.default_name:
+                output_base_name += "_{}".format(info.resampling)
+                output_base_name += os.path.splitext(info.source_file_name)[1]
+            else:
+                output_base_name = info.source_file_name
+            output_file_path = output_path / Path(output_base_name)
         else:
             output_file_path = output_path
         if output_file_path.exists() and not args.force and not args.dev__result_as_json:
@@ -234,6 +287,7 @@ def process_args(args: Any) -> None:
                     "padding": info.padding,
                     "padding_color": hex(info.padding_color),
                     "scaling": info.scaling,
+                    "filename_with_input_params": filename_with_input_params,
                 },
                 "source": {
                     "file_name": info.source_file_name,
@@ -274,6 +328,11 @@ def main() -> None:
         ])
     )
     parser.add_argument(
+        "-rs", "--resampling", default=Resampling.default_name,
+        choices=Resampling.get_all_names(),
+        help="リサイズ時のピクセル補完方法。",
+    )
+    parser.add_argument(
         "--padding", action="store_true",
         help="パディング(余白埋め)を許可する場合に指定。")
     parser.add_argument(
@@ -295,6 +354,9 @@ def main() -> None:
     parser.add_argument(
         "--dev__no_image_output", action="store_true",
         help="開発用コマンド、画像を出力しない。dev__result_as_jsonと合わせて使う想定。")
+    parser.add_argument(
+        "--dev__filename_with_input_params", action="store_true",
+        help="開発用コマンド、出力ファイル名にパラメータ値を含める。")
     parser.add_argument("-V", '--version', action='version', version='%(prog)s 1.0')
     args: argparse.Namespace = parser.parse_args()
     process_args(args)
