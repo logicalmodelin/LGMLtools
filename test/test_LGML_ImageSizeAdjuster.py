@@ -6,6 +6,8 @@ from pathlib import Path
 from PIL import Image
 from typing import List, Tuple, Any, ClassVar, Literal, Callable, Union
 
+tool_path: Path = Path(__file__).absolute().parent.parent / Path("LGML_ImageSizeAdjuster/LGMLImageSizeAdjuster.py")
+assert tool_path.exists()
 
 def _print_result(o: dict) -> None:
     for k1, v1 in o.items():
@@ -18,14 +20,21 @@ def _nealy_equals(a:float, b:float) -> bool:
     return abs(a - b) < 0.01
 
 
+def _print_help():
+    commands: List[str] = [
+        "py",
+        tool_path.as_posix(),
+        "-h",
+    ]
+    subprocess.run(commands)
+
+
 def _get_command_base(
-        image: str, width: int, height: int, preferred_direction: str=None,
+        image: str, width: int, height: int, preferred_direction: str = None,
         result_as_json: bool = True,
         filename_with_input_params: bool = True,
         additional: List[str] = None) -> List[str]:
     commands: List[str]
-    tool_path: Path = Path(__file__).absolute().parent.parent / Path("LGML_ImageSizeAdjuster/LGMLImageSizeAdjuster.py")
-    assert tool_path.exists()
     image_file = Path(__file__).parent.absolute() / Path(image)
     assert image_file.exists()
     commands = [
@@ -69,6 +78,8 @@ def main():
     o: dict
     image1: str = "images/test_640x427.png"
 
+    # _print_help()
+
     try:
 
         # 同じサイズ および基本チェック
@@ -84,6 +95,7 @@ def main():
         assert _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
 
         # 同じ比率のリサイズ 大きく
+        # 確認していない事 resampling 指定による画質の変化 -> 目視
         o = _execute_command(_get_command_base(image1, 1280, 854, additional=["--resampling", "nearest"]))
         assert o["result"]["width"] == 1280
         assert o["result"]["height"] == 854
