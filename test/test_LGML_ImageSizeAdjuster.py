@@ -9,6 +9,7 @@ from typing import List, Tuple, Any, ClassVar, Literal, Callable, Union
 tool_path: Path = Path(__file__).absolute().parent.parent / Path("LGML_ImageSizeAdjuster/LGMLImageSizeAdjuster.py")
 assert tool_path.exists()
 
+
 def _print_result(o: dict) -> None:
     for k1, v1 in o.items():
         print("[{}]".format(k1))
@@ -58,7 +59,7 @@ def _get_command_base(
     return commands
 
 
-def _execute_command(commands: List[str], print_result: bool = False) -> dict:
+def _execute_command(commands: List[str], print_result: bool = True) -> dict:
     result = subprocess.run(commands, stdout=subprocess.PIPE).stdout.decode()
     o: dict = None
     try:
@@ -87,24 +88,29 @@ def main():
         assert o["result"]["width"] == 640
         assert o["result"]["height"] == 427
         assert _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
+        assert o["result"]["processed"] == "RESIZE_ONLY"
 
         # 同じ比率のリサイズ 小さく
         o = _execute_command(_get_command_base(image1, 320, 214))
         assert o["result"]["width"] == 320
         assert o["result"]["height"] == 214
+        assert o["result"]["processed"] == "RESIZE_ONLY"
         assert _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
 
         # 同じ比率のリサイズ 大きく
         # 確認していない事 resampling 指定による画質の変化 -> 目視
-        o = _execute_command(_get_command_base(image1, 1280, 854, additional=["--resampling", "nearest"]))
+        o = _execute_command(_get_command_base(image1, 1280, 854, additional=["--resampling", "NEAREST"]))
         assert o["result"]["width"] == 1280
         assert o["result"]["height"] == 854
+        assert o["result"]["processed"] == "RESIZE_ONLY"
         assert _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
 
         # 比率が違う画像
-        o = _execute_command(_get_command_base(image1, 320, 320, "height"))
+        o = _execute_command(_get_command_base(image1, 320, 320, "HEIGHT"))
         assert o["result"]["width"] == 320
         assert o["result"]["height"] == 320
+        assert o["result"]["processed"] == "CROP"
+        assert not _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
 
     except AssertionError as err:
         _print_result(o)

@@ -5,81 +5,105 @@ import sys
 from pathlib import Path
 from PIL import Image
 from typing import List, Tuple, Any, Dict, ClassVar, Literal, Callable, Union
+from enum import Enum, auto
+# from strenum import StrEnum
 
 
-TARGET_FORMATS: Tuple[str] = ("png", "jpg", "gif", "bmp", "tga", "tif")
+TARGET_FORMATS: Tuple[str] = ("png", "jpg", "gif", "bmp", "tga", "tif")  # StrEnumにする？
 
 
-class PreferredDirections:
+class PreferredDirections(Enum):
 
-    WIDTH: str = "width"
-    HEIGHT: str = "height"
-    AUTO: str = "auto"
-    AUTO_CLIP: str = "auto_clip"
+    WIDTH = auto()
+    HEIGHT = auto()
+    AUTO = auto()
+    AUTO_CROP = auto()
 
     @classmethod
     def get_all(cls) -> List[str]:
-        return [cls.WIDTH, cls.HEIGHT, cls.AUTO, cls.AUTO_CLIP]
+        arr: List[str] = []
+        for i in PreferredDirections:
+            arr.append(i.name)
+        return arr
 
 
-class Resampling:
+class Resampling(Enum):
 
-    name: str
-    enum: int
-
-    default_name: ClassVar[str] = "bilinear"
-    instances: ClassVar[Dict[str, object]] = {}
+    NEAREST = auto()
+    BOX = auto()
+    BILINEAR = auto()
+    HAMMING = auto()
+    BICUBIC = auto()
+    LANCZOS = auto()
+    # see Image.Resampling
 
     @classmethod
-    def create(cls, name: str, enum: int):
-        o: Resampling = Resampling(name, enum)
-        cls.instances[name] = o
-        return o
+    def default_name(cls) -> str:
+        return cls.BILINEAR.name
 
     @classmethod
     def get_all_names(cls) -> List[str]:
-        return cls.instances.keys()
+        arr: List[str] = []
+        for i in Resampling:
+            arr.append(i.name)
+        return arr
 
     @classmethod
-    def get_resampling(cls, name: str) -> int:
-        return cls.instances[name].enum
+    def get_resampling(cls, resampling: object) -> Image.Resampling:
+        if resampling is Resampling.NEAREST:
+            return Image.Resampling.NEAREST
+        if resampling is Resampling.BOX:
+            return Image.Resampling.BOX
+        if resampling is Resampling.BILINEAR:
+            return Image.Resampling.BILINEAR
+        if resampling is Resampling.HAMMING:
+            return Image.Resampling.HAMMING
+        if resampling is Resampling.BICUBIC:
+            return Image.Resampling.BICUBIC
+        if resampling is Resampling.LANCZOS:
+            return Image.Resampling.LANCZOS
+        assert False
+        return None
 
-    def __init__(self, name: str, enum: int):
-        self.name = name
-        self.enum = enum
 
-
-Resampling.create("nearest", Image.Resampling.NEAREST)
-Resampling.create("box", Image.Resampling.BOX)
-Resampling.create("bilinear", Image.Resampling.BILINEAR)
-Resampling.create("hamming", Image.Resampling.HAMMING)
-Resampling.create("bicubic", Image.Resampling.BICUBIC)
-Resampling.create("lanczos", Image.Resampling.LANCZOS)
+class Processed(Enum):
+    """
+    処理内容を表す列挙型
+    """
+    RESIZE_ONLY = auto()
+    SCALE = auto()
+    CROP = auto()
+    PAD = auto()
 
 
 class ProcessInfo:
     source_file_name: str
     width: int
     height: int
-    image: Image
+    image: Image.Image
     # output_path: Path
     # force: bool = False
-    preferred_direction: str
+    preferred_direction: PreferredDirections
     padding: bool
     padding_color: int
     scaling: bool
+    resampling: Resampling
     source_pixel_ratio: float
     source_width: int
     source_height: int
-    resampling: str
+    processed: Processed
 
-    def __init__(self, image: Image, file_name: str, resampling:str):
+    _log: List[str]
+
+    def __init__(self, image: Image.Image, file_name: str, resampling: Resampling):
         self.image = image
         self.source_file_name = file_name
         self.source_width = image.width
         self.source_height = image.height
         self.source_pixel_ratio = image.width / image.height
         self.resampling = resampling
+        self.processed = Processed.RESIZE_ONLY
+        self._log = []
 
     # @property
     # def is_output_dir(self) -> bool:
@@ -89,15 +113,26 @@ class ProcessInfo:
     def ratio(self) -> float:
         return self.width / self.height
 
+    @property
+    def file_format(self) -> str:
+        return os.path.splitext(self.self.source_file_name)[1]
 
-def _open_image(file_path: Path, extensions: List[str]) -> Image:
+    def add_log(self, s: str) -> None:
+        # 自動テストの関係で、とりあえず日本語は渡さないようにする
+        self._log.append(s)
+
+    def get_log(self) -> str:
+        return "/".join(self._log)
+
+
+def _open_image(file_path: Path, extensions: List[str]) -> Tuple[Union[Image.Image, None], Union[Path, None]]:
     """
     画像ファイルを開く。対象ファイルがなかったら同じファイル名で拡張子だけ違うものを探して開く。
     Args:
         file_path (Path): 画像のファイルパス
         extensions (List[str]): 拡張子の羅列。"." は含まずに指定する。 ex) ["jpg", "png"]
     Returns:
-        Image: 画像が見つかった場合はImage、そうでなければ None
+        Image: 画像が見つかった場合はImage、そうでなければ None / 実際に開いたファイルパス
     """
     ext: str = file_path.suffix[1:]
     extensions_: List[str] = [ext]
@@ -110,47 +145,86 @@ def _open_image(file_path: Path, extensions: List[str]) -> Image:
         if not f.exists():
             continue
         try:
-            img: Image = Image.open(f)
+            img: Image.Image = Image.open(f)
             if img is not None:
                 img = img.convert("RGBA")
-                return img
+                return img, f
         except Exception as ex:
             print(ex)
             pass
-    return None
+    return None, None
 
 
-def _resize_by_width(info: ProcessInfo, nolog=True) -> Image:
+def _resize_by_width(info: ProcessInfo, nolog=True) -> Image.Image:
     """
     横幅のサイズ優先でサイズ変更を行う
     """
     ratio: float = info.width / info.image.width
     size: Tuple = (info.image.width, info.image.height)
     resize: Tuple = (info.width, int(info.image.height * ratio))
-    img: Image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
+    img: Image.Image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
     if not nolog:
         print("resize {}: {} -> {}".format(info.source_file_name, size, resize))
     return img
 
 
-def _resize_by_height(info: ProcessInfo, nolog=True) -> Image:
+def _resize_by_height(info: ProcessInfo, nolog=True) -> Image.Image:
     """
     縦幅のサイズ優先でサイズ変更を行う
     """
     ratio: float = info.height / info.image.height
     size: Tuple = (info.image.width, info.image.height)
     resize: Tuple = (int(info.image.width * ratio), info.height)
-    img: Image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
+    img: Image.Image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
     if not nolog:
         print("resize {}: {} -> {}".format(info.source_file_name, size, resize))
     return img
 
 
+def _clip_or_scale_or_padding(image: Image.Image, info: ProcessInfo, allow_scaling_from_source: bool = True):
+    dw: int = image.width - info.width
+    dh: int = image.height - info.height
+    assert dw == 0 or dh == 0  # 事前処理でどちらかは揃えてある
+    if info.padding:
+        # パディング 処理
+        if dw < 0 or dh < 0:
+            # info.padding_color はとりあえず透明度ありで処理してよい jpg保存時などに自動で破棄される
+            new_image: Image.Image = Image.new(mode="RGBA", size=(info.width, info.height), color=info.padding_color)
+            new_image.paste(image, (-dw, -dh))
+            image = new_image
+            info.processed = Processed.PAD
+            info.add_log("padded")
+    elif info.scaling:
+        # スケーリング 処理
+        resize: Tuple = (info.height, info.height)
+        if allow_scaling_from_source:
+            image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
+            info.processed = Processed.SCALE
+            info.add_log("scaled(origin)")
+        else:
+            image = image.resize(resize, Resampling.get_resampling(info.resampling))
+            info.processed = Processed.SCALE
+            info.add_log("scaled")
+    else:
+        # クリッピング 処理
+        cropped: bool = False
+        if dw > 0:
+            image = image.crop((dw / 2, 0, dw / 2 + info.width, info.height))
+            cropped = True
+        if dh > 0:
+            image = image.crop((0, dh / 2, info.width, dh / 2 + info.height))
+            cropped = True
+        if cropped:
+            info.processed = Processed.CROP
+            info.add_log("cropped")
+    return image
+
+
 def _resize_image(info: ProcessInfo) -> Image:
-    pd: str = info.preferred_direction
-    image: Image
-    image_by_width: Image
-    image_by_height: Image
+    pd: PreferredDirections = info.preferred_direction
+    image: Image.Image = None
+    image_by_width: Image.Image = None
+    image_by_height: Image.Image = None
     ratio_w: float
     ratio_h: float
     if pd != PreferredDirections.HEIGHT:
@@ -159,36 +233,34 @@ def _resize_image(info: ProcessInfo) -> Image:
         image_by_height = _resize_by_height(info)
 
     if pd == PreferredDirections.WIDTH:
-        return image_by_width
+        info.add_log("[dir width]")
+        return _clip_or_scale_or_padding(image_by_width, info)
     if pd == PreferredDirections.HEIGHT:
-        return image_by_height
+        info.add_log("[dir height]")
+        return _clip_or_scale_or_padding(image_by_height, info)
 
-    ratio_w: float = image_by_width.width / image_by_width.height
-    ratio_h: float = image_by_height.width / image_by_height.height
+    # ratio_w: float = image_by_width.width / image_by_width.height
+    # ratio_h: float = image_by_height.width / image_by_height.height
     size_w: float = image_by_width.width * image_by_width.height
     size_h: float = image_by_height.width * image_by_height.height
     xx: int
     yy: int
-    if pd == PreferredDirections.AUTO_CLIP:
+    if pd == PreferredDirections.AUTO_CROP:
         if size_w > size_h:
+            info.add_log("[dir auto crop width]")
             image = image_by_width
         else:
+            info.add_log("[dir auto crop height]")
             image = image_by_height
-        xx = int((info.width - image.width) / 2)
-        yy = int((info.height - image.height) / 2)
-        image.crop((xx, yy, xx + info.width, info.height))
-    elif pd == PreferredDirections.AUTO:
+        return _clip_or_scale_or_padding(image, info)
+    else:
         if size_w > size_h:
+            info.add_log("[dir auto height]")
             image = image_by_height
         else:
+            info.add_log("[dir auto width]")
             image = image_by_width
-        xx = int((info.width - image.width) / 2)
-        yy = int((info.height - image.height) / 2)
-        if info.padding_color and image.width * image.height < info.width * info.height:
-            new_image: Image = Image.new(mode="RGBA", size=(info.width, image.height), color=info.padding_color)
-            new_image.paste(image, (xx, yy))
-            image = new_image
-    return image
+        return _clip_or_scale_or_padding(image, info)
 
 
 def process_args(args: Any) -> None:
@@ -213,7 +285,7 @@ def process_args(args: Any) -> None:
         sys.exit(1)
 
     # 処理対象のImage一覧を作る
-    image: Image
+    image: Image.Image
     if is_target_dir:
         # もし読み込み指定がディレクトリなら画像ぽい物を探す
         for f in os.listdir(image_file_path):
@@ -222,13 +294,13 @@ def process_args(args: Any) -> None:
                 continue
             if ext[1:] not in TARGET_FORMATS:
                 continue
-            image = _open_image(image_file_path, other_formats)
+            image, fp = _open_image(image_file_path, other_formats)
             if image:
-                image_file_infos.append(ProcessInfo(image, image_file_path.name, args.resampling))
+                image_file_infos.append(ProcessInfo(image, fp.name, Resampling[args.resampling]))
     else:
-        image = _open_image(image_file_path, other_formats)
+        image, fp = _open_image(image_file_path, other_formats)
         if image:
-            image_file_infos.append(ProcessInfo(image, image_file_path.name, args.resampling))
+            image_file_infos.append(ProcessInfo(image, fp.name, Resampling[args.resampling]))
 
     if len(image_file_infos) == 0:
         print("no image input: {}{}".format(
@@ -242,7 +314,7 @@ def process_args(args: Any) -> None:
         info.width = args.width
         info.height = args.height
         info.image = image
-        info.preferred_direction = args.preferred_direction
+        info.preferred_direction = PreferredDirections[args.preferred_direction]
         info.padding = args.padding
         info.padding_color = int('0x' + args.padding_color, 16)
         info.scaling = args.scaling
@@ -253,6 +325,7 @@ def process_args(args: Any) -> None:
             output_base_name: str = os.path.splitext(info.source_file_name)[0]
             if filename_with_input_params:
                 output_base_name += "_"
+                output_base_name += "[{}]".format(info.processed.name)
                 output_base_name += "_{}x{}".format(image.width, image.height)
                 if args.preferred_direction:
                     output_base_name += "_{}".format(args.preferred_direction)
@@ -262,15 +335,15 @@ def process_args(args: Any) -> None:
                     output_base_name += "_padding"
                 if force:
                     output_base_name += "_force"
-                # if info.resampling != Resampling.default_name:
-                output_base_name += "_{}".format(info.resampling)
+                if info.resampling.name != Resampling.default_name():
+                    output_base_name += "_{}".format(info.resampling)
                 output_base_name += os.path.splitext(info.source_file_name)[1]
             else:
                 output_base_name = info.source_file_name
             output_file_path = output_path / Path(output_base_name)
         else:
             output_file_path = output_path
-        if output_file_path.exists() and not args.force and not args.dev__result_as_json:
+        if output_file_path.exists() and not force and not args.dev__result_as_json:
             r: str = input("上書き確認 y/n")
             if r.lower() != "y":
                 continue
@@ -281,9 +354,11 @@ def process_args(args: Any) -> None:
                     "width": image.width,
                     "height": image.height,
                     "pixel_ratio": image.width / image.height,
+                    "processed": info.processed.name,
+                    "log": info.get_log()
                 },
                 "params": {
-                    "preferred_direction": info.preferred_direction,
+                    "preferred_direction": info.preferred_direction.name,
                     "padding": info.padding,
                     "padding_color": hex(info.padding_color),
                     "scaling": info.scaling,
@@ -318,7 +393,7 @@ def main() -> None:
     parser.add_argument("-f", "--force", action="store_true",
                         help="処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。")
     parser.add_argument(
-        "-prdir", "--preferred_direction", default="height",
+        "-pd", "--preferred_direction", default="HEIGHT",
         choices=PreferredDirections.get_all(),
         help="\n".join([
             "リサイズ後に縦横比が合わない場合の優先方向指定。", 
@@ -328,7 +403,7 @@ def main() -> None:
         ])
     )
     parser.add_argument(
-        "-rs", "--resampling", default=Resampling.default_name,
+        "-rs", "--resampling", default=Resampling.default_name(),
         choices=Resampling.get_all_names(),
         help="リサイズ時のピクセル補完方法。",
     )
@@ -340,7 +415,8 @@ def main() -> None:
         help="パディング色をRGBA値16進数8桁で指定。透明度は出力フォーマットがjpgの場合無視される。")
     parser.add_argument(
         "--scaling", action="store_true",
-        help="サイズがあわない場合にスケーリングをしたい場合に指定。padding指定がある場合はpaddingを優先。")
+        help="サイズがあわない場合にスケーリングをしたい場合に指定。padding指定がある場合はpaddingを優先。"
+             "スケーリングもパディングもしない場合はクリッピングになる。")
     parser.add_argument(
         "-sofmt", "--search_other_format", action="store_true",
         help="指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。")
@@ -366,10 +442,10 @@ if __name__ == "__main__":
     main()
 
 """
-usage: LGMLImageSizeAdjuster.py [-h] [-o OUTPUT] [-f] [-prdir {width,height,auto,auto_clip}]
-                                [-rs {nearest,box,bilinear,hamming,bicubic,lanczos}]
-                                [--padding] [--padding_color PADDING_COLOR]
-                                [--scaling] [-sofmt] [-ofmt [OTHER_FORMATS ...]] [--dev__result_as_json]
+usage: LGMLImageSizeAdjuster.py [-h] [-o OUTPUT] [-f] [-pd {WIDTH,HEIGHT,AUTO,AUTO_CROP}]
+                                [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}] [--padding]
+                                [--padding_color PADDING_COLOR] [--scaling] [-sofmt]
+                                [-ofmt [OTHER_FORMATS ...]] [--dev__result_as_json]
                                 [--dev__no_image_output] [--dev__filename_with_input_params] [-V]
                                 image_file width height
 
@@ -385,17 +461,18 @@ optional arguments:
   -o OUTPUT, --output OUTPUT
                         アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。
   -f, --force           処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。
-  -prdir {width,height,auto,auto_clip}, --preferred_direction {width,height,auto,auto_clip}
+  -pd {WIDTH,HEIGHT,AUTO,AUTO_CROP}, --preferred_direction {WIDTH,HEIGHT,AUTO,AUTO_CROP}
                         リサイズ後に縦横比が合わない場合の優先方向指定。 
-                        auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。
-                        auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。
+                        auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。 
+                        auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。 
                         実際にクリップ・パディングするしないは別オプションで指定する。
-  -rs {nearest,box,bilinear,hamming,bicubic,lanczos}, --resampling {nearest,box,bilinear,hamming,bicubic,lanczos}
+  -rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}, --resampling {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}
                         リサイズ時のピクセル補完方法。
   --padding             パディング(余白埋め)を許可する場合に指定。
   --padding_color PADDING_COLOR
                         パディング色をRGBA値16進数8桁で指定。透明度は出力フォーマットがjpgの場合無視される。
   --scaling             サイズがあわない場合にスケーリングをしたい場合に指定。padding指定がある場合はpaddingを優先。
+                        スケーリングもパディングもしない場合はクリッピングになる。
   -sofmt, --search_other_format
                         指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。
   -ofmt [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
