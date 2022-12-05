@@ -193,7 +193,7 @@ def _clip_or_scale_or_padding(image: Image.Image, info: ProcessInfo):
         if info.scaling_instead_of_padding:
             image = info.image.resize((info.width, info.height), Resampling.get_resampling(info.resampling))
             info.processed = Processed.SCALE
-            info.add_log("scaled(pad)")
+            info.add_log("scaled(instead of pad)")
         else:
             # パディング 処理
             new_image: Image.Image = Image.new(
@@ -203,12 +203,12 @@ def _clip_or_scale_or_padding(image: Image.Image, info: ProcessInfo):
             new_image.paste(image, (-int(dw / 2), -int(dh / 2)))
             image = new_image
             info.processed = Processed.PAD
-            info.add_log("padded")
+            info.add_log("padded {} x {}".format(dw, dh))
     elif da > 0:
         if info.scaling_instead_of_cropping:
             image = info.image.resize((info.width, info.height), Resampling.get_resampling(info.resampling))
             info.processed = Processed.SCALE
-            info.add_log("scaled(crop)")
+            info.add_log("scaled(instead of rop)")
         else:
             # クリッピング 処理
             cropped: bool = False
@@ -220,7 +220,7 @@ def _clip_or_scale_or_padding(image: Image.Image, info: ProcessInfo):
                 cropped = True
             if cropped:
                 info.processed = Processed.CROP
-                info.add_log("cropped")
+                info.add_log("cropped {} x {}".format(dw, dh))
     return image
 
 
@@ -378,6 +378,7 @@ def process_args(args: Any) -> None:
                 continue
         if args.dev__result_as_json:
             o: dict = {
+                "command": "{}".format(sys.argv[1:]),
                 "result": {
                     "output_file_path": output_file_path.as_posix(),
                     "width": image.width,
