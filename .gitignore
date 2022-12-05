@@ -130,4 +130,5 @@ dmypy.json
 
 # LGMLTools
 **/work
+**/temp_for_test
 ~*

@@ -10,7 +10,7 @@ from enum import Enum, auto
 # from strenum import StrEnum
 
 
-TARGET_FORMATS: Tuple[str] = ("png", "jpg", "gif", "bmp", "tga", "tif")  # StrEnumにする？
+TARGET_FORMATS: Tuple[str] = ("png", "jpg", "gif", "bmp", "tif", "tga")  # StrEnumにする？
 
 
 class PreferredDirections(Enum):
@@ -93,16 +93,17 @@ class ProcessInfo:
     source_width: int
     source_height: int
     processed: Processed
-
+    output_path: Path
     _log: List[str]
 
-    def __init__(self, image: Image.Image, file_name: str, resampling: Resampling):
+    def __init__(self, image: Image.Image, file_name: str, resampling: Resampling, output_path: Path):
         self.image = image
         self.source_file_name = file_name
         self.source_width = image.width
         self.source_height = image.height
         self.source_pixel_ratio = image.width / image.height
         self.resampling = resampling
+        self.output_path = output_path
         self.processed = Processed.RESIZE_ONLY
         self._log = []
 
@@ -144,11 +145,13 @@ def _open_image(file_path: Path, extensions: List[str]) -> Tuple[Union[Image.Ima
     for ext in extensions_:
         f = Path("{}/{}.{}".format(file_path.parent.as_posix(), file_path.stem, ext))
         if not f.exists():
+            # print("not found! {}".format(f))
             continue
         try:
             img: Image.Image = Image.open(f)
             if img is not None:
                 img = img.convert("RGBA")
+                # print("found {} {}".format(img, f))
                 return img, f
         except Exception as ex:
             print(ex)
@@ -268,18 +271,16 @@ def _resize_image(info: ProcessInfo) -> Image:
         return _clip_or_scale_or_padding(image, info)
 
 
-def _modify_output_path(input_path: str, output_path: str, w: int, h: int) -> Path:
+def _modify_output_path(input_path: str, output_path: str, w: int, h: int, index: int) -> Path:
     """
     出力ファイル名の変数展開
     """
     output_path = output_path.replace("{n}", os.path.splitext(
-        os.path.basename(input_path))[0]).replace("{w}", str(w)).replace("{h}", str(h))
+        os.path.basename(input_path))[0]).replace("{w}", str(w)).replace("{h}", str(h)).replace("{i}", str(index))
     return Path(output_path)
 
 
-def process_args(args: Any) -> None:
-    filename_with_input_params: bool = args.dev__filename_with_input_params
-    force: bool = args.force
+def _create_process_info(args: Any) -> List[ProcessInfo]:
     padding_color_str: str = args.padding_color
     if len(padding_color_str) == 8:
         padding_color_str = padding_color_str
@@ -299,17 +300,18 @@ def process_args(args: Any) -> None:
         other_formats = args.other_formats
     image_file_infos: List[ProcessInfo] = []
 
-    for image_file in args.image_files:
+    for image_file_index, image_file in enumerate(args.image_files):
         image_file_path: Path = Path(image_file)
         output_path: Path
         if not args.output:
             output_path = image_file_path
         else:
-            output_path = _modify_output_path(image_file, args.output, args.width, args.height)
+            output_path = _modify_output_path(image_file, args.output, args.width, args.height, image_file_index)
 
         is_target_dir: bool = image_file_path.is_dir()
         is_output_dir: bool = output_path.is_dir()
         if is_target_dir and not is_output_dir:
+            # TODO 名前にINDEX番号が入れば可能？
             print("読み込み対象がディレクトリの場合は出力先もディレクトリにする必要があります。", file=sys.stderr)
             sys.exit(1)
 
@@ -325,11 +327,19 @@ def process_args(args: Any) -> None:
                     continue
                 image, fp = _open_image(image_file_path, other_formats)
                 if image:
-                    image_file_infos.append(ProcessInfo(image, fp.name, Resampling[args.resampling]))
+                    info = ProcessInfo(image, fp.name, Resampling[args.resampling], output_path)
         else:
             image, fp = _open_image(image_file_path, other_formats)
             if image:
-                image_file_infos.append(ProcessInfo(image, fp.name, Resampling[args.resampling]))
+                info = ProcessInfo(image, fp.name, Resampling[args.resampling], output_path)
+        info.width = args.width
+        info.height = args.height
+        info.preferred_direction = PreferredDirections[args.preferred_direction]
+        info.padding_color = padding_color
+        info.scaling_instead_of_padding = args.scaling_instead_of_padding
+        info.scaling_instead_of_cropping = args.scaling_instead_of_cropping
+        info.image = image
+        image_file_infos.append(info)
 
     if len(image_file_infos) == 0:
         print("no image input: {}{}".format(
@@ -338,19 +348,23 @@ def process_args(args: Any) -> None:
             ),
             file=sys.stderr)
         sys.exit(1)
+    return image_file_infos
 
+
+def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
+    filename_with_input_params: bool = args.dev__filename_with_input_params
+    force: bool = args.force
+    json_response = {
+        "command": sys.argv[1:],
+        "items": [],
+    }
     for info in image_file_infos:
-        info.width = args.width
-        info.height = args.height
-        info.image = image
-        info.preferred_direction = PreferredDirections[args.preferred_direction]
-        info.padding_color = padding_color
-        info.scaling_instead_of_padding = args.scaling_instead_of_padding
-        info.scaling_instead_of_cropping = args.scaling_instead_of_cropping
-
         image = _resize_image(info)
         output_file_path: Path
-        if is_output_dir:
+        # def _modify_filename_for_dev(fn:str):
+        # TODO dir書き出しでない場合にも適用
+        #     return fn
+        if info.output_path.is_dir():
             output_base_name: str = os.path.splitext(info.source_file_name)[0]
             if filename_with_input_params:
                 output_base_name += "_"
@@ -370,16 +384,15 @@ def process_args(args: Any) -> None:
             else:
                 output_base_name = info.source_file_name
                 # TODO dir書き出しでない場合にも適用
-            output_file_path = output_path / Path(output_base_name)
+            output_file_path = info.output_path / Path(output_base_name)
         else:
-            output_file_path = output_path
+            output_file_path = info.output_path
         if output_file_path.exists() and not force and not args.dev__result_as_json:
             r: str = input("上書き確認 y/n")
             if r.lower() != "y":
                 continue
         if args.dev__result_as_json:
             o: dict = {
-                "command": "{}".format(sys.argv[1:]),
                 "result": {
                     "output_file_path": output_file_path.as_posix(),
                     "width": image.width,
@@ -405,13 +418,16 @@ def process_args(args: Any) -> None:
                     "pixel_ratio": info.source_pixel_ratio,
                 },
             }
-            json_str: str = json.dumps(o, allow_nan=True, indent=2)
-            print(json_str, file=sys.stdout)
+            json_response["items"].append(o)
         if not args.dev__no_image_output:
             if not output_file_path.parent.exists():
                 # フォルダがなければ作る
                 os.makedirs(output_file_path.parent)
+            if output_file_path.name.endswith(".jpg"):
+                image = image.convert("RGB")
             image.save(output_file_path)
+        json_str: str = json.dumps(json_response, allow_nan=True, indent=2)
+        print(json_str, file=sys.stdout)
 
 
 def main() -> None:
@@ -426,7 +442,8 @@ def main() -> None:
     parser.add_argument("-o", "--output", type=str, default="",
                         help="アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。"
                              "指定されタフォルダが存在しない場合、自動で作られる。"
-                             "{n}や{w},{h}という記述はそれぞれ、入力ファイル名の拡張を除いた部分・横幅・縦幅に変数展開される。")
+                             "{n},{w},{h},{i}という記述はそれぞれ、"
+                             "入力ファイル名の拡張を除いた部分・横幅・縦幅・処理番号に変数展開される。")
     parser.add_argument("-f", "--force", action="store_true",
                         help="処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。")
     parser.add_argument(
@@ -446,7 +463,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--padding_color", type=str, default="11223344",
-        help="パディング色をARGB値16進数8桁もしくはRGB値16進数6桁で指定。透明度指定は出力フォーマットがjpgの場合無視される。")
+        help="パディング色をARGB値16進数8桁もしくはRGB値16進数6桁で指定。"
+             "透明度指定は出力フォーマットがjpg/bmp/gifの場合無視される。")
     parser.add_argument(
         "--scaling_instead_of_padding", action="store_true",
         help="パディングの代わりにスケーリングをしたい場合に指定。")
@@ -454,10 +472,10 @@ def main() -> None:
         "--scaling_instead_of_cropping", action="store_true",
         help="クリッピングの代わりにスケーリングをしたい場合に指定。")
     parser.add_argument(
-        "-sofmt", "--search_other_format", action="store_true",
+        "-sof", "--search_other_format", action="store_true",
         help="指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。")
     parser.add_argument(
-        "-ofmt", "--other_formats", nargs="*", type=str, default=TARGET_FORMATS,
+        "-of", "--other_formats", nargs="*", type=str, default=TARGET_FORMATS,
         help="異なるファイルフォーマットのファイル名を自動検索する場合の優先度。"
              "入力がディレクトリの場合は無効。")
     parser.add_argument(
@@ -471,7 +489,7 @@ def main() -> None:
         help="開発用コマンド、出力ファイル名にパラメータ値を含める。")
     parser.add_argument("-V", '--version', action='version', version='%(prog)s 1.0')
     args: argparse.Namespace = parser.parse_args()
-    process_args(args)
+    _adjust_images(_create_process_info(args), args)
 
 
 if __name__ == "__main__":
