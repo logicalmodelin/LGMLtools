@@ -5,25 +5,29 @@ import sys
 from pathlib import Path
 from PIL import Image
 from typing import List, Tuple, Any, ClassVar, Literal, Callable, Union
+from pprint import pprint
 
 tool_path: Path = Path(__file__).absolute().parent.parent / Path("LGML_ImageSizeAdjuster/LGMLImageSizeAdjuster.py")
 assert tool_path.exists()
+images_folder: Path = Path(__file__).parent / Path("images")
 temp_folder: Path = Path(__file__).parent / Path("temp_for_test")
+debug_json_path: Path = temp_folder / Path("result.json")
 
 
 def _print_result(o: dict) -> None:
-    if o is None:
-        print("None")
-        return
-    if "command" in o:
-        print("[command]\n\t{}".format(o["command"]))
-    if "items" in o:
-        for index, item in enumerate(o["items"]):
-            print("[item #{}]".format(index))
-            for k1, v1 in item.items():
-                print("    [{}]".format(k1))
-                for k2, v2 in v1.items():
-                    print("\t{}: {}".format(k2, v2))
+    pprint(o)
+    # if o is None:
+    #     print("None")
+    #     return
+    # if "command" in o:
+    #     print("[command]\n\t{}".format(o["command"]))
+    # if "items" in o:
+    #     for index, item in enumerate(o["items"]):
+    #         print("[item #{}]".format(index))
+    #         for k1, v1 in item.items():
+    #             print("    [{}]".format(k1))
+    #             for k2, v2 in v1.items():
+    #                 print("\t{}: {}".format(k2, v2))
 
 
 def _nealy_equals(a: float, b: float) -> bool:
@@ -40,17 +44,24 @@ def _print_help():
 
 
 def _get_command_base(
-        images: List[str], width: int, height: int, preferred_direction: str = None,
+        images_or_dir: Union[str, List[str]], width: int, height: int, preferred_direction: str = None,
         out: str = None,
         result_as_json: bool = True,
         filename_with_input_params: bool = True,
         additional: List[str] = None) -> List[str]:
     commands: List[str]
+    if debug_json_path.exists():
+        os.unlink(debug_json_path)
     image_paths: List[Path] = []
-    for i in images:
-        image_file: Path = Path(__file__).parent.absolute() / Path(i)
-        # assert image_file.exists()
-        image_paths.append(image_file)
+    if isinstance(images_or_dir, List):
+        # files
+        for i in images_or_dir:
+            image_file: Path = Path(__file__).parent.absolute() / Path(i)
+            # assert image_file.exists()
+            image_paths.append(image_file)
+    else:
+        # dir
+        image_paths.append(Path(images_or_dir))
     commands = [
         "py",
         tool_path.as_posix()
@@ -76,7 +87,8 @@ def _get_command_base(
     if preferred_direction is not None:
         commands += ["--preferred_direction", preferred_direction]
     if result_as_json:
-        commands.append("--dev__result_as_json")
+        commands.append("--dev__write_result_json")
+        commands.append(debug_json_path.as_posix())
     if filename_with_input_params:
         commands.append("--dev__filename_with_input_params")
     if additional is not None and len(additional) > 0:
@@ -86,22 +98,21 @@ def _get_command_base(
 
 
 def _execute_command(commands: List[str], print_result: bool = True) -> dict:
-    result = subprocess.run(commands, stdout=subprocess.PIPE).stdout.decode()
-    # print(result)
+    subprocess.run(commands, stdout=subprocess.PIPE).stdout.decode()
     o: dict = None
-    try:
-        o = json.loads(result)
-    except json.decoder.JSONDecodeError as err:
-        raise err
-    if print_result:
-        _print_result(o)
-    # print(o["params"]["width"], o["result"]["width"])
-    # print(o["params"]["height"], o["result"]["height"])
-    # print(o["params"]["pixel_ratio"], o["result"]["pixel_ratio"])
-    for item in o["items"]:
-        assert item["params"]["width"] == item["result"]["width"]
-        assert item["params"]["height"] == item["result"]["height"]
-        assert _nealy_equals(item["params"]["pixel_ratio"], item["result"]["pixel_ratio"])
+    if debug_json_path.exists():
+        with open(debug_json_path, "r") as fp:
+            o = json.load(fp)
+    if o is not None:
+        if print_result:
+            _print_result(o)
+        # print(o["params"]["width"], o["result"]["width"])
+        # print(o["params"]["height"], o["result"]["height"])
+        # print(o["params"]["pixel_ratio"], o["result"]["pixel_ratio"])
+        for item in o["items"]:
+            assert item["params"]["width"] == item["result"]["width"]
+            assert item["params"]["height"] == item["result"]["height"]
+            assert _nealy_equals(item["params"]["pixel_ratio"], item["result"]["pixel_ratio"])
     return o
 
 
@@ -121,6 +132,7 @@ def main():
         # ######### HEIGHT優先挙動チェック ######### #
 
         def test1():
+            _clear_temp_folder()
             # 同じサイズ および基本チェック
             o = _execute_command(_get_command_base(image_list1, 640, 427))
             assert o["items"][0]["result"]["processed"] == "RESIZE_ONLY"
@@ -157,6 +169,7 @@ def main():
         # ######### 上記までのテストを WIDTH優先で行うもの ######### #
 
         def test2():
+            _clear_temp_folder()
             # 同じサイズ および基本チェック
             o = _execute_command(_get_command_base(image_list1, 640, 427, "WIDTH"))
             assert o["items"][0]["result"]["processed"] == "RESIZE_ONLY"
@@ -197,6 +210,7 @@ def main():
         # ######### 自動クロップ方向優先 ######### #
 
         def test3():
+            _clear_temp_folder()
             # 同じサイズ および基本チェック
             o = _execute_command(_get_command_base(image_list1, 640, 427, "AUTO_CROP"))
             assert o["items"][0]["result"]["processed"] == "RESIZE_ONLY"
@@ -234,6 +248,7 @@ def main():
         # ######### 自動パディング方向優先 ######### #
 
         def test4():
+            _clear_temp_folder()
             # 同じサイズ および基本チェック
             o = _execute_command(_get_command_base(image_list1, 640, 427, "AUTO_PAD"))
             assert o["items"][0]["result"]["processed"] == "RESIZE_ONLY"
@@ -272,19 +287,35 @@ def main():
             assert o["items"][0]["result"]["processed"] == "SCALE"
 
         def test5():
+            _clear_temp_folder()
             # 複数画像入力テスト
             #   デフォ出力、ファイル出力、ディレクトリ出力
             #   フォルダ自動作成
+
             # フォルダ入力テスト
             #   デフォ出力、ファイル出力、ディレクトリ出力
-            pass
+            o = _execute_command(
+                _get_command_base(images_folder.as_posix(), 640, 640, out=temp_folder.as_posix(),
+                                  filename_with_input_params=False))
+            assert (temp_folder / Path("test1080x1920.png")).exists()
+            assert (temp_folder / Path("test1920x1080.png")).exists()
+            assert (temp_folder / Path("test_640x427.png")).exists()
+
+            # _clear_temp_folder()
+            # o = _execute_command(
+            #     _get_command_base(images_folder.as_posix(), 640, 640, out=(temp_folder / "test{i}.png").as_posix(),
+            #                       filename_with_input_params=False, additional=["--search_other_format"]))
 
         def test6():
-            # フォーマットテスト
+            _clear_temp_folder()
+            # すべてのフォーマット出力テスト
             for fmt in all_format:
                 o = _execute_command(
                     _get_command_base(image_list1, 640, 320, out="{}/{}.{}".format(temp_folder.as_posix(), "{n}", fmt)))
                 assert len(list(temp_folder.glob("*.{}".format(fmt)))) == 1
+
+        def test7():
+            _clear_temp_folder()
             # 自動拡張子変換テスト
             image_list: List[str] = [x.replace(".png", ".jpg") for x in image_list2]
             o = _execute_command(
@@ -293,13 +324,14 @@ def main():
             assert (temp_folder / Path("pic0.png")).exists()
             assert (temp_folder / Path("pic1.png")).exists()
 
-        def test7():
-            #   ファイル入力、複数ファイル入力、ディレクトリ入力
+        def test8():
+            _clear_temp_folder()
             # 変数展開テスト
-            pass
+            o = _execute_command(
+                _get_command_base(image_list1, 640, 320, out=(temp_folder / Path("{w}x{h}.jpg")).as_posix()))
+            assert (temp_folder / Path("640x320.jpg")).exists()
 
         def _clear_temp_folder():
-            # os.unlink(tmp_dir / Path())
             files: List[str] = []
             for fmt in all_format:
                 files += list(temp_folder.glob("*.{}".format(fmt)))
@@ -308,14 +340,14 @@ def main():
                 os.unlink(f)
 
         _clear_temp_folder()
-        # test1()
-        # test2()
-        # test3()
-        # test4()
+        test1()
+        test2()
+        test3()
+        test4()
         test5()
-        _clear_temp_folder()
         test6()
         test7()
+        test8()
 
     except AssertionError as err:
         _print_result(o)
@@ -323,4 +355,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _print_help()
+    # main()

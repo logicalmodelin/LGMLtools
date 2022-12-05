@@ -301,6 +301,7 @@ def _create_process_info(args: Any) -> List[ProcessInfo]:
     image_file_infos: List[ProcessInfo] = []
 
     for image_file_index, image_file in enumerate(args.image_files):
+        info: ProcessInfo = None
         image_file_path: Path = Path(image_file)
         output_path: Path
         if not args.output:
@@ -310,36 +311,42 @@ def _create_process_info(args: Any) -> List[ProcessInfo]:
 
         is_target_dir: bool = image_file_path.is_dir()
         is_output_dir: bool = output_path.is_dir()
-        if is_target_dir and not is_output_dir:
-            # TODO 名前にINDEX番号が入れば可能？
-            print("読み込み対象がディレクトリの場合は出力先もディレクトリにする必要があります。", file=sys.stderr)
-            sys.exit(1)
+
+        # 変数展開でiやnを使うと全てのファイル上書きを回避できるのでエラーにしない
+        # if (len(args.image_files) > 1 or is_target_dir) and not is_output_dir:
+        #     print("読み込み対象がディレクトリや複数ファイルの場合は出力先もディレクトリにする必要があります。", file=sys.stderr)
+        #     sys.exit(1)
 
         # 処理対象のImage一覧を作る
         image: Image.Image
+
+        def append_info(info_: ProcessInfo):
+            info_.width = args.width
+            info_.height = args.height
+            info_.preferred_direction = PreferredDirections[args.preferred_direction]
+            info_.padding_color = padding_color
+            info_.scaling_instead_of_padding = args.scaling_instead_of_padding
+            info_.scaling_instead_of_cropping = args.scaling_instead_of_cropping
+            info_.image = image
+            image_file_infos.append(info_)
+
         if is_target_dir:
             # もし読み込み指定がディレクトリなら画像ぽい物を探す
             for f in os.listdir(image_file_path):
-                ext: str = os.path.splitext(f)
+                _, ext = os.path.splitext(f)
                 if not ext:
                     continue
                 if ext[1:] not in TARGET_FORMATS:
                     continue
-                image, fp = _open_image(image_file_path, other_formats)
+                image, fp = _open_image(image_file_path / f, other_formats)
                 if image:
                     info = ProcessInfo(image, fp.name, Resampling[args.resampling], output_path)
+                    append_info(info)
         else:
             image, fp = _open_image(image_file_path, other_formats)
             if image:
                 info = ProcessInfo(image, fp.name, Resampling[args.resampling], output_path)
-        info.width = args.width
-        info.height = args.height
-        info.preferred_direction = PreferredDirections[args.preferred_direction]
-        info.padding_color = padding_color
-        info.scaling_instead_of_padding = args.scaling_instead_of_padding
-        info.scaling_instead_of_cropping = args.scaling_instead_of_cropping
-        info.image = image
-        image_file_infos.append(info)
+                append_info(info)
 
     if len(image_file_infos) == 0:
         print("no image input: {}{}".format(
@@ -355,7 +362,7 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
     filename_with_input_params: bool = args.dev__filename_with_input_params
     force: bool = args.force
     json_response = {
-        "command": sys.argv[1:],
+        "command": "{}".format(" ".join(sys.argv[1:])),
         "items": [],
     }
     for info in image_file_infos:
@@ -387,11 +394,11 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
             output_file_path = info.output_path / Path(output_base_name)
         else:
             output_file_path = info.output_path
-        if output_file_path.exists() and not force and not args.dev__result_as_json:
+        if output_file_path.exists() and not force:
             r: str = input("上書き確認 y/n")
             if r.lower() != "y":
                 continue
-        if args.dev__result_as_json:
+        if args.dev__write_result_json != "":
             o: dict = {
                 "result": {
                     "output_file_path": output_file_path.as_posix(),
@@ -426,8 +433,12 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
             if output_file_path.name.endswith(".jpg"):
                 image = image.convert("RGB")
             image.save(output_file_path)
-        json_str: str = json.dumps(json_response, allow_nan=True, indent=2)
-        print(json_str, file=sys.stdout)
+
+        try:
+            with open(args.dev__write_result_json, "w") as fp:
+                json.dump(json_response, fp, indent=2)
+        except Exception as ex:
+            print(str(ex), file=sys.stderr)
 
 
 def main() -> None:
@@ -479,11 +490,11 @@ def main() -> None:
         help="異なるファイルフォーマットのファイル名を自動検索する場合の優先度。"
              "入力がディレクトリの場合は無効。")
     parser.add_argument(
-        "--dev__result_as_json", action="store_true",
-        help="開発用コマンド、jsonデータで処理の概要を標準出力する。")
+        "--dev__write_result_json", default="", type=str,
+        help="開発用コマンド、指定されたパスにjsonデータで処理の概要を出力する。")
     parser.add_argument(
         "--dev__no_image_output", action="store_true",
-        help="開発用コマンド、画像を出力しない。dev__result_as_jsonと合わせて使う想定。")
+        help="開発用コマンド、画像を出力しない。dev__write_result_jsonと合わせて使う想定。")
     parser.add_argument(
         "--dev__filename_with_input_params", action="store_true",
         help="開発用コマンド、出力ファイル名にパラメータ値を含める。")
@@ -496,39 +507,37 @@ if __name__ == "__main__":
     main()
 
 """
-usage: LGMLImageSizeAdjuster.py [-h] [-o OUTPUT] [-f] [-pd {WIDTH,HEIGHT,AUTO,AUTO_CROP}] [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}] [--padding] [--padding_color PADDING_COLOR] [--scaling] [-sofmt] [-ofmt [OTHER_FORMATS ...]] [--dev__result_as_json]
-                                [--dev__no_image_output] [--dev__filename_with_input_params] [-V]
-                                image_file width height
+usage: LGMLImageSizeAdjuster.py [-h] [-wpx WIDTH] [-hpx HEIGHT] [-o OUTPUT] [-f] [-pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}] [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}] [--padding_color PADDING_COLOR] [--scaling_instead_of_padding]
+                                [--scaling_instead_of_cropping] [-sof] [-of [OTHER_FORMATS ...]] [--dev__write_result_json DEV__WRITE_RESULT_JSON] [--dev__no_image_output] [--dev__filename_with_input_params] [-V]
+                                [image_files ...]
 
 画像のサイズを適切に調整する。jpgとpngなどフォーマットの違いを修正する。ディレクトリを指定するとその中のすべてのファイルを処理対象にする。
 
 positional arguments:
-  image_file            処理対象となる画像ファイルのパス。
-  width                 出力画像の横幅。
-  height                出力画像の高さ。
+  image_files           処理対象となる画像ファイルまたはフォルダのパス。
 
 optional arguments:
   -h, --help            show this help message and exit
+  -wpx WIDTH, --width WIDTH
+                        出力画像の横幅。
+  -hpx HEIGHT, --height HEIGHT
+                        出力画像の高さ。
   -o OUTPUT, --output OUTPUT
-                        アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。指定されタフォルダが存在しない場合、自動で作られる。{n}や{w},{h}という記述はそれぞれ、入力ファイル名の拡張を除いた部分・横幅・縦幅に変数展開される。
+                        アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。指定されタフォルダが存在しない場合、自動で作られる。{n},{w},{h},{i}という記述はそれぞれ、入力ファイル名の拡張を除いた部分・横幅・縦幅・処理番号に変数展開される。
   -f, --force           処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。
-  -pd {WIDTH,HEIGHT,AUTO,AUTO_CROP}, --preferred_direction {WIDTH,HEIGHT,AUTO,AUTO_CROP}
+  -pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}, --preferred_direction {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}
                         リサイズ後に縦横比が合わない場合の優先方向指定。 auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。 auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。 実際にクリップ・パディングするしないは別オプション
-で指定する。
-  -rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}, --resampling {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}
-                        リサイズ時のピクセル補完方法。
-  --padding             パディング(余白埋め)を許可する場合に指定。
-  --padding_color PADDING_COLOR
-                        パディング色をRGBA値16進数8桁で指定。透明度は出力フォーマットがjpgの場合無視される。
-  --scaling             サイズがあわない場合にスケーリングをしたい場合に指定。padding指定がある場合はpaddingを優先。スケーリングもパディングもしない場合はクリッピングになる。
-  -sofmt, --search_other_format
+                        パディングの代わりにスケーリングをしたい場合に指定。
+  --scaling_instead_of_cropping
+                        クリッピングの代わりにスケーリングをしたい場合に指定。
+  -sof, --search_other_format
                         指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。
-  -ofmt [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
+  -of [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
                         異なるファイルフォーマットのファイル名を自動検索する場合の優先度。入力がディレクトリの場合は無効。
-  --dev__result_as_json
-                        開発用コマンド、jsonデータで処理の概要を標準出力する。
+  --dev__write_result_json DEV__WRITE_RESULT_JSON
+                        開発用コマンド、指定されたパスにjsonデータで処理の概要を出力する。
   --dev__no_image_output
-                        開発用コマンド、画像を出力しない。dev__result_as_jsonと合わせて使う想定。
+                        開発用コマンド、画像を出力しない。dev__write_result_jsonと合わせて使う想定。
   --dev__filename_with_input_params
                         開発用コマンド、出力ファイル名にパラメータ値を含める。
   -V, --version         show program's version number and exit
