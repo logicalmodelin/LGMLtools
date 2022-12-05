@@ -17,7 +17,7 @@ class PreferredDirections(Enum):
 
     WIDTH = auto()
     HEIGHT = auto()
-    AUTO = auto()
+    AUTO_PAD = auto()
     AUTO_CROP = auto()
 
     @classmethod
@@ -200,10 +200,10 @@ def _clip_or_scale_or_padding(image: Image.Image, info: ProcessInfo):
                 mode="RGBA", size=(info.width, info.height), color=info.padding_color
             )
             # info.padding_color はとりあえず透明度ありで処理してよい jpg保存時などに自動で破棄される
+            info.add_log("padded ({},{} -> {},{})".format(image.width, image.height, info.width, info.height))
             new_image.paste(image, (-int(dw / 2), -int(dh / 2)))
             image = new_image
             info.processed = Processed.PAD
-            info.add_log("padded {} x {}".format(dw, dh))
     elif da > 0:
         if info.scaling_instead_of_cropping:
             image = info.image.resize((info.width, info.height), Resampling.get_resampling(info.resampling))
@@ -213,14 +213,15 @@ def _clip_or_scale_or_padding(image: Image.Image, info: ProcessInfo):
             # クリッピング 処理
             cropped: bool = False
             if dw > 0:
+                info.add_log("cropped ({},{} -> {},{})".format(image.width, image.height, info.width, info.height))
                 image = image.crop((dw / 2, 0, dw / 2 + info.width, info.height))
                 cropped = True
             if dh > 0:
+                info.add_log("cropped ({},{} -> {},{})".format(image.width, image.height, info.width, info.height))
                 image = image.crop((0, dh / 2, info.width, dh / 2 + info.height))
                 cropped = True
             if cropped:
                 info.processed = Processed.CROP
-                info.add_log("cropped {} x {}".format(dw, dh))
     return image
 
 

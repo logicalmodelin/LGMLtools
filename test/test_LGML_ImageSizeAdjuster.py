@@ -17,7 +17,7 @@ def _print_result(o: dict) -> None:
     for k1, v1 in o.items():
         print("[{}]".format(k1))
         if k1 == "command":
-            print(v1)
+            print("\t{}".format(v1))
         else:
             for k2, v2 in v1.items():
                 print("\t{}: {}".format(k2, v2))
@@ -121,7 +121,7 @@ def main():
             assert o["result"]["processed"] == "CROP"
 
             # 比率が違う画像(scaling4crop)
-            o = _execute_command(_get_command_base(image_list1, 320, 320, "HEIGHT",
+            o = _execute_command(_get_command_base(image_list1, 320, 320,
                                                    additional=["--scaling_instead_of_cropping"]))
             assert o["result"]["processed"] == "SCALE"
 
@@ -179,10 +179,79 @@ def main():
         # ######### 自動クロップ方向優先 ######### #
 
         def test3():
-            pass
+            # 同じサイズ および基本チェック
+            o = _execute_command(_get_command_base(image_list1, 640, 427, "AUTO_CROP"))
+            assert o["result"]["processed"] == "RESIZE_ONLY"
+
+            # 同じ比率のリサイズ 小さく
+            o = _execute_command(_get_command_base(image_list1, 320, 214, "AUTO_CROP"))
+            assert o["result"]["processed"] == "RESIZE_ONLY"
+
+            # 同じ比率のリサイズ 大きく
+            # 確認していない事 resampling 指定による画質の変化 -> 目視
+            o = _execute_command(
+                _get_command_base(image_list1, 1280, 854, "AUTO_CROP", additional=["--resampling", "HAMMING"]))
+            assert o["result"]["processed"] == "RESIZE_ONLY"
+
+            # 比率が違う画像(crop)
+            o = _execute_command(_get_command_base(image_list1, 320, 320, "AUTO_CROP"))
+            assert o["result"]["processed"] == "CROP"
+
+            # 比率が違う画像(scaling4crop)
+            o = _execute_command(_get_command_base(image_list1, 320, 320, "AUTO_CROP",
+                                                   additional=["--scaling_instead_of_cropping"]))
+            assert o["result"]["processed"] == "SCALE"
+
+            # 比率が違う画像(padding)
+            # 確認していない事 パディング色 -> 目視 完全透明
+            o = _execute_command(
+                _get_command_base(image_list1, 640, 320, "AUTO_CROP", additional=["--padding_color", "00ff8800"]))
+            assert o["result"]["processed"] == "CROP"
+
+            # 比率が違う画像(scaling4pad)
+            o = _execute_command(
+                _get_command_base(image_list1, 640, 320, "AUTO_CROP", additional=["--scaling_instead_of_cropping"]))
+            assert o["result"]["processed"] == "SCALE"
+
+        # ######### 自動パディング方向優先 ######### #
 
         def test4():
-            pass
+            # 同じサイズ および基本チェック
+            o = _execute_command(_get_command_base(image_list1, 640, 427, "AUTO_PAD"))
+            assert o["result"]["processed"] == "RESIZE_ONLY"
+
+            # 同じ比率のリサイズ 小さく
+            o = _execute_command(_get_command_base(image_list1, 320, 214, "AUTO_PAD"))
+            assert o["result"]["processed"] == "PAD"
+            # o = _execute_command(_get_command_base(image_list1, 320, 214 - 1, "AUTO_PAD"))
+            # RESIZE_ONLYになるサイズ指定を見つけるのが難しい
+            # assert o["result"]["processed"] == "RESIZE_ONLY"
+
+            # 同じ比率のリサイズ 大きく
+            # 確認していない事 resampling 指定による画質の変化 -> 目視
+            o = _execute_command(
+                _get_command_base(image_list1, 1280, 854, "AUTO_PAD", additional=["--resampling", "HAMMING"]))
+            assert o["result"]["processed"] == "RESIZE_ONLY"
+
+            # 比率が違う画像(crop)
+            o = _execute_command(_get_command_base(image_list1, 320, 320, "AUTO_PAD"))
+            assert o["result"]["processed"] == "PAD"
+
+            # 比率が違う画像(scaling4crop)
+            o = _execute_command(_get_command_base(image_list1, 320, 320, "AUTO_PAD",
+                                                   additional=["--scaling_instead_of_padding"]))
+            assert o["result"]["processed"] == "SCALE"
+
+            # 比率が違う画像(padding)
+            # 確認していない事 パディング色 -> 目視 完全透明
+            o = _execute_command(
+                _get_command_base(image_list1, 640, 320, "AUTO_PAD", additional=["--padding_color", "00ff8800"]))
+            assert o["result"]["processed"] == "PAD"
+
+            # 比率が違う画像(scaling4pad)
+            o = _execute_command(
+                _get_command_base(image_list1, 640, 320, "AUTO_PAD", additional=["--scaling_instead_of_padding"]))
+            assert o["result"]["processed"] == "SCALE"
 
         test1()
         test2()
