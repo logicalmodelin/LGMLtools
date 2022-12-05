@@ -368,32 +368,28 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
     for info in image_file_infos:
         image = _resize_image(info)
         output_file_path: Path
-        # def _modify_filename_for_dev(fn:str):
-        # TODO dir書き出しでない場合にも適用
-        #     return fn
+
         if info.output_path.is_dir():
-            output_base_name: str = os.path.splitext(info.source_file_name)[0]
-            if filename_with_input_params:
-                output_base_name += "_"
-                output_base_name += "[{}]".format(info.processed.name)
-                output_base_name += "_{}x{}".format(image.width, image.height)
-                if args.preferred_direction:
-                    output_base_name += "_{}".format(args.preferred_direction)
-                if args.scaling_instead_of_padding:
-                    output_base_name += "_scaling4padding"
-                if args.scaling_instead_of_cropping:
-                    output_base_name += "_scaling4cropping"
-                if force:
-                    output_base_name += "_force"
-                if info.resampling.name != Resampling.default_name():
-                    output_base_name += "_{}".format(info.resampling)
-                output_base_name += os.path.splitext(info.source_file_name)[1]
-            else:
-                output_base_name = info.source_file_name
-                # TODO dir書き出しでない場合にも適用
-            output_file_path = info.output_path / Path(output_base_name)
+            output_file_path = info.output_path / Path(info.source_file_name)
         else:
             output_file_path = info.output_path
+        if filename_with_input_params:
+            output_base_name = output_file_path.stem
+            output_base_name += "_"
+            output_base_name += "[{}]".format(info.processed.name)
+            output_base_name += "_{}x{}".format(image.width, image.height)
+            if args.preferred_direction:
+                output_base_name += "_{}".format(args.preferred_direction)
+            if args.scaling_instead_of_padding:
+                output_base_name += "_scaling4padding"
+            if args.scaling_instead_of_cropping:
+                output_base_name += "_scaling4cropping"
+            if force:
+                output_base_name += "_force"
+            if info.resampling.name != Resampling.default_name():
+                output_base_name += "_{}".format(info.resampling)
+            output_file_path = output_file_path.parent / Path(output_base_name + output_file_path.suffix)
+
         if output_file_path.exists() and not force:
             r: str = input("上書き確認 y/n")
             if r.lower() != "y":

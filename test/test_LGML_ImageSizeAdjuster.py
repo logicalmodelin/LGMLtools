@@ -328,7 +328,9 @@ def main():
             _clear_temp_folder()
             # 変数展開テスト
             o = _execute_command(
-                _get_command_base(image_list1, 640, 320, out=(temp_folder / Path("{w}x{h}.jpg")).as_posix()))
+                _get_command_base(
+                    image_list1, 640, 320,
+                    out=(temp_folder / Path("{w}x{h}.jpg")).as_posix(), filename_with_input_params=False))
             assert (temp_folder / Path("640x320.jpg")).exists()
 
         def _clear_temp_folder():
@@ -355,5 +357,5 @@ def main():
 
 
 if __name__ == "__main__":
-    _print_help()
-    # main()
+    # _print_help()
+    main()
