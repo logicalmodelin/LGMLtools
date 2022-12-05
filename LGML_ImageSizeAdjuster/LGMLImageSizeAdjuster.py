@@ -85,9 +85,9 @@ class ProcessInfo:
     # output_path: Path
     # force: bool = False
     preferred_direction: PreferredDirections
-    padding: bool
     padding_color: int
-    scaling: bool
+    scaling_instead_of_padding: bool
+    scaling_instead_of_cropping: bool
     resampling: Resampling
     source_pixel_ratio: float
     source_width: int
@@ -182,42 +182,45 @@ def _resize_by_height(info: ProcessInfo, nolog=True) -> Image.Image:
     return img
 
 
-def _clip_or_scale_or_padding(image: Image.Image, info: ProcessInfo, allow_scaling_from_source: bool = True):
+def _clip_or_scale_or_padding(image: Image.Image, info: ProcessInfo):
     dw: int = image.width - info.width
     dh: int = image.height - info.height
     assert dw == 0 or dh == 0  # 事前処理でどちらかは揃えてある
-    if info.padding:
-        # パディング 処理
-        if dw < 0 or dh < 0:
+    info_area: int = info.width * info.height
+    image_area: int = image.width * image.height
+    da: int = image_area - info_area
+    if da < 0:
+        if info.scaling_instead_of_padding:
+            image = info.image.resize((info.width, info.height), Resampling.get_resampling(info.resampling))
+            info.processed = Processed.SCALE
+            info.add_log("scaled(pad)")
+        else:
+            # パディング 処理
+            new_image: Image.Image = Image.new(
+                mode="RGBA", size=(info.width, info.height), color=info.padding_color
+            )
             # info.padding_color はとりあえず透明度ありで処理してよい jpg保存時などに自動で破棄される
-            new_image: Image.Image = Image.new(mode="RGBA", size=(info.width, info.height), color=info.padding_color)
-            new_image.paste(image, (-dw, -dh))
+            new_image.paste(image, (-int(dw / 2), -int(dh / 2)))
             image = new_image
             info.processed = Processed.PAD
             info.add_log("padded")
-    elif info.scaling:
-        # スケーリング 処理
-        resize: Tuple = (info.height, info.height)
-        if allow_scaling_from_source:
-            image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
+    elif da > 0:
+        if info.scaling_instead_of_cropping:
+            image = info.image.resize((info.width, info.height), Resampling.get_resampling(info.resampling))
             info.processed = Processed.SCALE
-            info.add_log("scaled(origin)")
+            info.add_log("scaled(crop)")
         else:
-            image = image.resize(resize, Resampling.get_resampling(info.resampling))
-            info.processed = Processed.SCALE
-            info.add_log("scaled")
-    else:
-        # クリッピング 処理
-        cropped: bool = False
-        if dw > 0:
-            image = image.crop((dw / 2, 0, dw / 2 + info.width, info.height))
-            cropped = True
-        if dh > 0:
-            image = image.crop((0, dh / 2, info.width, dh / 2 + info.height))
-            cropped = True
-        if cropped:
-            info.processed = Processed.CROP
-            info.add_log("cropped")
+            # クリッピング 処理
+            cropped: bool = False
+            if dw > 0:
+                image = image.crop((dw / 2, 0, dw / 2 + info.width, info.height))
+                cropped = True
+            if dh > 0:
+                image = image.crop((0, dh / 2, info.width, dh / 2 + info.height))
+                cropped = True
+            if cropped:
+                info.processed = Processed.CROP
+                info.add_log("cropped")
     return image
 
 
@@ -276,10 +279,25 @@ def _modify_output_path(input_path: str, output_path: str, w: int, h: int) -> Pa
 def process_args(args: Any) -> None:
     filename_with_input_params: bool = args.dev__filename_with_input_params
     force: bool = args.force
+    padding_color_str: str = args.padding_color
+    if len(padding_color_str) == 8:
+        padding_color_str = padding_color_str
+    elif len(padding_color_str) == 6:
+        padding_color_str = "ff" + padding_color_str
+    else:
+        print("カラー値は16進数6文字または8文字で指定してください。: {}".format(padding_color_str), file=sys.stderr)
+        sys.exit(1)
+    # ABGR -> ARGB
+    padding_color_str = \
+        padding_color_str[0:2] + padding_color_str[6:8] + padding_color_str[4:6] + padding_color_str[2:4]
+    padding_color: int = int('0x' + padding_color_str, 16)
+
+    assert (len(padding_color_str) == 6 or len(padding_color_str) == 8)
     other_formats: List[str] = []
     if args.search_other_format:
         other_formats = args.other_formats
     image_file_infos: List[ProcessInfo] = []
+
     for image_file in args.image_files:
         image_file_path: Path = Path(image_file)
         output_path: Path
@@ -325,9 +343,9 @@ def process_args(args: Any) -> None:
         info.height = args.height
         info.image = image
         info.preferred_direction = PreferredDirections[args.preferred_direction]
-        info.padding = args.padding
-        info.padding_color = int('0x' + args.padding_color, 16)
-        info.scaling = args.scaling
+        info.padding_color = padding_color
+        info.scaling_instead_of_padding = args.scaling_instead_of_padding
+        info.scaling_instead_of_cropping = args.scaling_instead_of_cropping
 
         image = _resize_image(info)
         output_file_path: Path
@@ -339,10 +357,10 @@ def process_args(args: Any) -> None:
                 output_base_name += "_{}x{}".format(image.width, image.height)
                 if args.preferred_direction:
                     output_base_name += "_{}".format(args.preferred_direction)
-                if args.scaling:
-                    output_base_name += "_scaling"
-                if args.padding:
-                    output_base_name += "_padding"
+                if args.scaling_instead_of_padding:
+                    output_base_name += "_scaling4padding"
+                if args.scaling_instead_of_cropping:
+                    output_base_name += "_scaling4cropping"
                 if force:
                     output_base_name += "_force"
                 if info.resampling.name != Resampling.default_name():
@@ -370,12 +388,13 @@ def process_args(args: Any) -> None:
                 },
                 "params": {
                     "preferred_direction": info.preferred_direction.name,
-                    "padding": info.padding,
                     "padding_color": hex(info.padding_color),
-                    "scaling": info.scaling,
+                    "scaling_instead_of_padding": info.scaling_instead_of_padding,
+                    "scaling_instead_of_cropping": info.scaling_instead_of_cropping,
                     "filename_with_input_params": filename_with_input_params,
                     "width": info.width,
                     "height": info.height,
+                    "pixel_ratio": info.width / info.height,
                 },
                 "source": {
                     "file_name": info.source_file_name,
@@ -424,15 +443,14 @@ def main() -> None:
         help="リサイズ時のピクセル補完方法。",
     )
     parser.add_argument(
-        "--padding", action="store_true",
-        help="パディング(余白埋め)を許可する場合に指定。")
+        "--padding_color", type=str, default="11223344",
+        help="パディング色をARGB値16進数8桁もしくはRGB値16進数6桁で指定。透明度指定は出力フォーマットがjpgの場合無視される。")
     parser.add_argument(
-        "--padding_color", type=str, default="111111",
-        help="パディング色をRGBA値16進数8桁で指定。透明度は出力フォーマットがjpgの場合無視される。")
+        "--scaling_instead_of_padding", action="store_true",
+        help="パディングの代わりにスケーリングをしたい場合に指定。")
     parser.add_argument(
-        "--scaling", action="store_true",
-        help="サイズがあわない場合にスケーリングをしたい場合に指定。padding指定がある場合はpaddingを優先。"
-             "スケーリングもパディングもしない場合はクリッピングになる。")
+        "--scaling_instead_of_cropping", action="store_true",
+        help="クリッピングの代わりにスケーリングをしたい場合に指定。")
     parser.add_argument(
         "-sofmt", "--search_other_format", action="store_true",
         help="指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。")

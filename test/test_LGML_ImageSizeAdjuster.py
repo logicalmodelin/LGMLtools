@@ -74,6 +74,12 @@ def _execute_command(commands: List[str], print_result: bool = True) -> dict:
         raise err
     if print_result:
         _print_result(o)
+    # print(o["params"]["width"], o["result"]["width"])
+    # print(o["params"]["height"], o["result"]["height"])
+    # print(o["params"]["pixel_ratio"], o["result"]["pixel_ratio"])
+    assert o["params"]["width"] == o["result"]["width"]
+    assert o["params"]["height"] == o["result"]["height"]
+    assert _nealy_equals(o["params"]["pixel_ratio"], o["result"]["pixel_ratio"])
     return o
 
 
@@ -81,7 +87,7 @@ def main():
     commands: List[str]
     width: int
     height: int
-    o: dict
+    o: dict = None
     image_list1: List[str] = ["images/test_640x427.png"]
 
     # _print_help()
@@ -92,7 +98,6 @@ def main():
         o = _execute_command(_get_command_base(image_list1, 640, 427))
         assert o["result"]["width"] == 640
         assert o["result"]["height"] == 427
-        assert _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
         assert o["result"]["processed"] == "RESIZE_ONLY"
 
         # 同じ比率のリサイズ 小さく
@@ -100,7 +105,6 @@ def main():
         assert o["result"]["width"] == 320
         assert o["result"]["height"] == 214
         assert o["result"]["processed"] == "RESIZE_ONLY"
-        assert _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
 
         # 同じ比率のリサイズ 大きく
         # 確認していない事 resampling 指定による画質の変化 -> 目視
@@ -108,14 +112,34 @@ def main():
         assert o["result"]["width"] == 1280
         assert o["result"]["height"] == 854
         assert o["result"]["processed"] == "RESIZE_ONLY"
-        assert _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
 
-        # 比率が違う画像
+        # 比率が違う画像(crop)
         o = _execute_command(_get_command_base(image_list1, 320, 320, "HEIGHT"))
         assert o["result"]["width"] == 320
         assert o["result"]["height"] == 320
         assert o["result"]["processed"] == "CROP"
-        assert not _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
+
+        # 比率が違う画像(scaling4crop)
+        o = _execute_command(_get_command_base(image_list1, 320, 320, "HEIGHT",
+                                               additional=["--scaling_instead_of_cropping"]))
+        assert o["result"]["width"] == 320
+        assert o["result"]["height"] == 320
+        assert o["result"]["processed"] == "SCALE"
+
+        # 比率が違う画像(padding)
+        # 確認していない事 パディング色 -> 目視 オレンジ
+        o = _execute_command(
+            _get_command_base(image_list1, 640, 320, additional=["--padding_color", "ffff8800"]))
+        assert o["result"]["width"] == 640
+        assert o["result"]["height"] == 320
+        assert o["result"]["processed"] == "PAD"
+
+        # 比率が違う画像(scaling4pad)
+        o = _execute_command(
+            _get_command_base(image_list1, 640, 320, additional=["--scaling_instead_of_padding"]))
+        assert o["result"]["width"] == 640
+        assert o["result"]["height"] == 320
+        assert o["result"]["processed"] == "SCALE"
 
     except AssertionError as err:
         _print_result(o)
