@@ -31,18 +31,23 @@ def _print_help():
 
 
 def _get_command_base(
-        image: str, width: int, height: int, preferred_direction: str = None,
+        images: List[str], width: int, height: int, preferred_direction: str = None,
         result_as_json: bool = True,
         filename_with_input_params: bool = True,
         additional: List[str] = None) -> List[str]:
     commands: List[str]
-    image_file = Path(__file__).parent.absolute() / Path(image)
-    assert image_file.exists()
+    image_paths: List[Path] = []
+    for i in images:
+        image_file: Path = Path(__file__).parent.absolute() / Path(i)
+        assert image_file.exists()
+        image_paths.append(image_file)
     commands = [
         "py",
         tool_path.as_posix(),
-        image_file.as_posix(),
+        " ".join([x.as_posix() for x in image_paths]),
+        "-wpx",
         str(width),
+        "-hpx",
         str(height),
         "-o",
         "work"
@@ -77,21 +82,21 @@ def main():
     width: int
     height: int
     o: dict
-    image1: str = "images/test_640x427.png"
+    image_list1: List[str] = ["images/test_640x427.png"]
 
     # _print_help()
 
     try:
 
         # 同じサイズ および基本チェック
-        o = _execute_command(_get_command_base(image1, 640, 427))
+        o = _execute_command(_get_command_base(image_list1, 640, 427))
         assert o["result"]["width"] == 640
         assert o["result"]["height"] == 427
         assert _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
         assert o["result"]["processed"] == "RESIZE_ONLY"
 
         # 同じ比率のリサイズ 小さく
-        o = _execute_command(_get_command_base(image1, 320, 214))
+        o = _execute_command(_get_command_base(image_list1, 320, 214))
         assert o["result"]["width"] == 320
         assert o["result"]["height"] == 214
         assert o["result"]["processed"] == "RESIZE_ONLY"
@@ -99,14 +104,14 @@ def main():
 
         # 同じ比率のリサイズ 大きく
         # 確認していない事 resampling 指定による画質の変化 -> 目視
-        o = _execute_command(_get_command_base(image1, 1280, 854, additional=["--resampling", "NEAREST"]))
+        o = _execute_command(_get_command_base(image_list1, 1280, 854, additional=["--resampling", "NEAREST"]))
         assert o["result"]["width"] == 1280
         assert o["result"]["height"] == 854
         assert o["result"]["processed"] == "RESIZE_ONLY"
         assert _nealy_equals(o["source"]["pixel_ratio"], o["result"]["pixel_ratio"])
 
         # 比率が違う画像
-        o = _execute_command(_get_command_base(image1, 320, 320, "HEIGHT"))
+        o = _execute_command(_get_command_base(image_list1, 320, 320, "HEIGHT"))
         assert o["result"]["width"] == 320
         assert o["result"]["height"] == 320
         assert o["result"]["processed"] == "CROP"

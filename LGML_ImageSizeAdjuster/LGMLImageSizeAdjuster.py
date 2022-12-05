@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from PIL import Image
@@ -263,44 +264,53 @@ def _resize_image(info: ProcessInfo) -> Image:
         return _clip_or_scale_or_padding(image, info)
 
 
-def process_args(args: Any) -> None:
+def _modify_output_path(input_path: str, output_path: str, w: int, h: int) -> Path:
+    """
+    出力ファイル名の変数展開
+    """
+    output_path = output_path.replace("{n}", os.path.splitext(
+        os.path.basename(input_path))[0]).replace("{w}", str(w)).replace("{h}", str(h))
+    return Path(output_path)
 
+
+def process_args(args: Any) -> None:
+    filename_with_input_params: bool = args.dev__filename_with_input_params
+    force: bool = args.force
     other_formats: List[str] = []
     if args.search_other_format:
         other_formats = args.other_formats
-    image_file_path: Path = Path(args.image_file)
-    output_path: Path
-    if not args.output:
-        output_path = Path(image_file_path)
-    else:
-        output_path = Path(args.output)
     image_file_infos: List[ProcessInfo] = []
-    filename_with_input_params: bool = args.dev__filename_with_input_params
-    force: bool = args.force
+    for image_file in args.image_files:
+        image_file_path: Path = Path(image_file)
+        output_path: Path
+        if not args.output:
+            output_path = image_file_path
+        else:
+            output_path = _modify_output_path(image_file, args.output, args.width, args.height)
 
-    is_target_dir: bool = image_file_path.is_dir()
-    is_output_dir: bool = output_path.is_dir()
-    if is_target_dir and not is_output_dir:
-        print("読み込み対象がディレクトリの場合は出力先もディレクトリにする必要があります。", file=sys.stderr)
-        sys.exit(1)
+        is_target_dir: bool = image_file_path.is_dir()
+        is_output_dir: bool = output_path.is_dir()
+        if is_target_dir and not is_output_dir:
+            print("読み込み対象がディレクトリの場合は出力先もディレクトリにする必要があります。", file=sys.stderr)
+            sys.exit(1)
 
-    # 処理対象のImage一覧を作る
-    image: Image.Image
-    if is_target_dir:
-        # もし読み込み指定がディレクトリなら画像ぽい物を探す
-        for f in os.listdir(image_file_path):
-            ext: str = os.path.splitext(f)
-            if not ext:
-                continue
-            if ext[1:] not in TARGET_FORMATS:
-                continue
+        # 処理対象のImage一覧を作る
+        image: Image.Image
+        if is_target_dir:
+            # もし読み込み指定がディレクトリなら画像ぽい物を探す
+            for f in os.listdir(image_file_path):
+                ext: str = os.path.splitext(f)
+                if not ext:
+                    continue
+                if ext[1:] not in TARGET_FORMATS:
+                    continue
+                image, fp = _open_image(image_file_path, other_formats)
+                if image:
+                    image_file_infos.append(ProcessInfo(image, fp.name, Resampling[args.resampling]))
+        else:
             image, fp = _open_image(image_file_path, other_formats)
             if image:
                 image_file_infos.append(ProcessInfo(image, fp.name, Resampling[args.resampling]))
-    else:
-        image, fp = _open_image(image_file_path, other_formats)
-        if image:
-            image_file_infos.append(ProcessInfo(image, fp.name, Resampling[args.resampling]))
 
     if len(image_file_infos) == 0:
         print("no image input: {}{}".format(
@@ -340,6 +350,7 @@ def process_args(args: Any) -> None:
                 output_base_name += os.path.splitext(info.source_file_name)[1]
             else:
                 output_base_name = info.source_file_name
+                # TODO dir書き出しでない場合にも適用
             output_file_path = output_path / Path(output_base_name)
         else:
             output_file_path = output_path
@@ -363,6 +374,8 @@ def process_args(args: Any) -> None:
                     "padding_color": hex(info.padding_color),
                     "scaling": info.scaling,
                     "filename_with_input_params": filename_with_input_params,
+                    "width": info.width,
+                    "height": info.height,
                 },
                 "source": {
                     "file_name": info.source_file_name,
@@ -371,11 +384,12 @@ def process_args(args: Any) -> None:
                     "pixel_ratio": info.source_pixel_ratio,
                 },
             }
-            json_str: str = json.dumps(o, allow_nan=True)
+            json_str: str = json.dumps(o, allow_nan=True, indent=2)
             print(json_str, file=sys.stdout)
-        else:
-            print(output_file_path)  # TODO 書き出し
         if not args.dev__no_image_output:
+            if not output_file_path.parent.exists():
+                # フォルダがなければ作る
+                os.makedirs(output_file_path.parent)
             image.save(output_file_path)
 
 
@@ -385,18 +399,20 @@ def main() -> None:
                     'jpgとpngなどフォーマットの違いを修正する。'
                     'ディレクトリを指定するとその中のすべてのファイルを処理対象にする。',
     )
-    parser.add_argument("image_file", type=str, help="処理対象となる画像ファイルのパス。")
-    parser.add_argument("width", type=int, help="出力画像の横幅。")
-    parser.add_argument("height", type=int, help="出力画像の高さ。")
+    parser.add_argument("image_files", nargs='*',  help="処理対象となる画像ファイルまたはフォルダのパス。")
+    parser.add_argument("-wpx", "--width", type=int, help="出力画像の横幅。")
+    parser.add_argument("-hpx", "--height", type=int, help="出力画像の高さ。")
     parser.add_argument("-o", "--output", type=str, default="",
-                        help="アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。")
+                        help="アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。"
+                             "指定されタフォルダが存在しない場合、自動で作られる。"
+                             "{n}や{w},{h}という記述はそれぞれ、入力ファイル名の拡張を除いた部分・横幅・縦幅に変数展開される。")
     parser.add_argument("-f", "--force", action="store_true",
                         help="処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。")
     parser.add_argument(
         "-pd", "--preferred_direction", default="HEIGHT",
         choices=PreferredDirections.get_all(),
         help="\n".join([
-            "リサイズ後に縦横比が合わない場合の優先方向指定。", 
+            "リサイズ後に縦横比が合わない場合の優先方向指定。",
             "auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。",
             "auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。",
             "実際にクリップ・パディングするしないは別オプションで指定する。"
@@ -442,10 +458,7 @@ if __name__ == "__main__":
     main()
 
 """
-usage: LGMLImageSizeAdjuster.py [-h] [-o OUTPUT] [-f] [-pd {WIDTH,HEIGHT,AUTO,AUTO_CROP}]
-                                [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}] [--padding]
-                                [--padding_color PADDING_COLOR] [--scaling] [-sofmt]
-                                [-ofmt [OTHER_FORMATS ...]] [--dev__result_as_json]
+usage: LGMLImageSizeAdjuster.py [-h] [-o OUTPUT] [-f] [-pd {WIDTH,HEIGHT,AUTO,AUTO_CROP}] [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}] [--padding] [--padding_color PADDING_COLOR] [--scaling] [-sofmt] [-ofmt [OTHER_FORMATS ...]] [--dev__result_as_json]
                                 [--dev__no_image_output] [--dev__filename_with_input_params] [-V]
                                 image_file width height
 
@@ -459,20 +472,17 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -o OUTPUT, --output OUTPUT
-                        アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。
+                        アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。指定されタフォルダが存在しない場合、自動で作られる。{n}や{w},{h}という記述はそれぞれ、入力ファイル名の拡張を除いた部分・横幅・縦幅に変数展開される。
   -f, --force           処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。
   -pd {WIDTH,HEIGHT,AUTO,AUTO_CROP}, --preferred_direction {WIDTH,HEIGHT,AUTO,AUTO_CROP}
-                        リサイズ後に縦横比が合わない場合の優先方向指定。 
-                        auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。 
-                        auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。 
-                        実際にクリップ・パディングするしないは別オプションで指定する。
+                        リサイズ後に縦横比が合わない場合の優先方向指定。 auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。 auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。 実際にクリップ・パディングするしないは別オプション
+で指定する。
   -rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}, --resampling {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}
                         リサイズ時のピクセル補完方法。
   --padding             パディング(余白埋め)を許可する場合に指定。
   --padding_color PADDING_COLOR
                         パディング色をRGBA値16進数8桁で指定。透明度は出力フォーマットがjpgの場合無視される。
-  --scaling             サイズがあわない場合にスケーリングをしたい場合に指定。padding指定がある場合はpaddingを優先。
-                        スケーリングもパディングもしない場合はクリッピングになる。
+  --scaling             サイズがあわない場合にスケーリングをしたい場合に指定。padding指定がある場合はpaddingを優先。スケーリングもパディングもしない場合はクリッピングになる。
   -sofmt, --search_other_format
                         指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。
   -ofmt [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
