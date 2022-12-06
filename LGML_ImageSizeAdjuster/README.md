@@ -5,9 +5,10 @@
 python3.7とかで動くと思います。あまりマイナーバージョン気にしてません。
 Pillowが必要です。あともし適当に足りなければモジュール入れてください。
 
-# usage
+# コマンドヘルプ
 
-以下のコマンドで動きますが、決まった使い方をする場合batファイルなどで呼び出すと便利です。
+※ 以下のコマンドで動きますが、いろいろできることがあるので、
+決まった使い方をする場合はbatファイルなどで引数決め打ちにして呼び出すと便利です。
 
 ```
 usage: LGMLImageSizeAdjuster.py [-h] [-s SIZE SIZE] [-o OUTPUT] [-f] [-owerr] [-pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}] [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}]
