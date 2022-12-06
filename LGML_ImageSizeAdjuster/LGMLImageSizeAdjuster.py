@@ -279,6 +279,14 @@ def _resize_image(info: ProcessInfo) -> Image:
         return _clip_or_scale_or_padding(image, info)
 
 
+def _is_output_dir_like(p: Path) -> bool:
+    # 指定されたパス文字はディレクトリぽいか？
+    if not p.exists():
+        # まだ存在しない場合拡張子がなければ新規作成のディレクトリと判断
+        return p.suffix == ""
+    return p.is_dir()
+
+
 def _modify_output_path(input_path: str, output_path: Path, w: int, h: int, index: int) -> Path:
     """
     出力ファイル名の変数展開
@@ -309,7 +317,7 @@ def _create_process_info(args: Any) -> List[ProcessInfo]:
             infoに基本情報を付与して一覧に加える
             """
             index: int = len(image_file_infos)
-            if output_path_.is_dir():
+            if _is_output_dir_like(output_path):
                 output_path_ = output_path_ / source_path.name
             output_path_ = _modify_output_path(source_path, output_path_, args.width, args.height, index)
             pi = ProcessInfo(im, source_path, Resampling[args.resampling], output_path_)
@@ -409,7 +417,6 @@ def _check_info_list(image_file_infos: List[ProcessInfo], other_formats: List[st
 
 def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
     filename_with_input_params: bool = args.dev__filename_with_input_params
-    force: bool = args.force
     json_response = {
         "command": "{}".format(" ".join(sys.argv[1:])),
         "items": [],
@@ -418,10 +425,12 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
         image = _resize_image(info)
         output_file_path: Path
 
-        if info.output_path.is_dir():
+        # TODO この処理は _check_info_list でやるべき
+        if _is_output_dir_like(info.output_path):
             output_file_path = info.output_path / Path(info.source_base_name)
         else:
             output_file_path = info.output_path
+
         if filename_with_input_params:
             output_base_name = output_file_path.stem
             output_base_name += "_"
@@ -433,16 +442,23 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
                 output_base_name += "_scaling4padding"
             if args.scaling_instead_of_cropping:
                 output_base_name += "_scaling4cropping"
-            if force:
+            if args.force:
                 output_base_name += "_force"
+            if args.overwrite_err:
+                output_base_name += "_ow_err"
             if info.resampling.name != Resampling.default_name():
                 output_base_name += "_{}".format(info.resampling)
             output_file_path = output_file_path.parent / Path(output_base_name + output_file_path.suffix)
 
-        if output_file_path.exists() and not force:
-            r: str = input("上書き確認 y/n")
-            if r.lower() != "y":
-                continue
+        if output_file_path.exists():
+            print("{} exists.".format(output_file_path.name))
+            if args.overwrite_err:
+                print("ファイルが上書きされます。{}".format(output_file_path.name), file=sys.stderr)
+                sys.exit(1)
+            elif not args.force:
+                r: str = input("上書き確認({}) y/n".format(output_file_path.name))
+                if r.lower() != "y":
+                    continue
         if args.dev__write_result_json != "":
             o: dict = {
                 "result": {
@@ -479,11 +495,11 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
                 image = image.convert("RGB")
             image.save(output_file_path)
 
-        try:
-            with open(args.dev__write_result_json, "w") as fp:
-                json.dump(json_response, fp, indent=2)
-        except Exception as ex:
-            print(str(ex), file=sys.stderr)
+    try:
+        with open(args.dev__write_result_json, "w") as fp:
+            json.dump(json_response, fp, indent=2)
+    except Exception as ex:
+        print(str(ex), file=sys.stderr)
 
 
 def main() -> None:
@@ -502,6 +518,8 @@ def main() -> None:
                              "入力ファイル名の拡張を除いた部分・横幅・縦幅・処理番号に変数展開される。")
     parser.add_argument("-f", "--force", action="store_true",
                         help="処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。")
+    parser.add_argument("-owerr", "--overwrite_err", action="store_true",
+                        help="ファイル上書き時はエラーで止める。forceより優先。")
     parser.add_argument(
         "-pd", "--preferred_direction", default="HEIGHT",
         choices=PreferredDirections.get_all(),
@@ -550,40 +568,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-"""
-usage: LGMLImageSizeAdjuster.py [-h] [-wpx WIDTH] [-hpx HEIGHT] [-o OUTPUT] [-f] [-pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}] [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}] [--padding_color PADDING_COLOR] [--scaling_instead_of_padding]
-                                [--scaling_instead_of_cropping] [-sof] [-of [OTHER_FORMATS ...]] [--dev__write_result_json DEV__WRITE_RESULT_JSON] [--dryrun] [--dev__filename_with_input_params] [-V]
-                                [image_files ...]
-
-画像のサイズを適切に調整する。jpgとpngなどフォーマットの違いを修正する。ディレクトリを指定するとその中のすべてのファイルを処理対象にする。
-
-positional arguments:
-  image_files           処理対象となる画像ファイルまたはフォルダのパス。
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -wpx WIDTH, --width WIDTH
-                        出力画像の横幅。
-  -hpx HEIGHT, --height HEIGHT
-                        出力画像の高さ。
-  -o OUTPUT, --output OUTPUT
-                        アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。指定されタフォルダが存在しない場合、自動で作られる。{n},{w},{h},{i}という記述はそれぞれ、入力ファイル名の拡張を除いた部分・横幅・縦幅・処理番号に変数展開される。
-  -f, --force           処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。
-  -pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}, --preferred_direction {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}
-                        リサイズ後に縦横比が合わない場合の優先方向指定。 auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。 auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。 実際にクリップ・パディングするしないは別オプション
-                        パディングの代わりにスケーリングをしたい場合に指定。
-  --scaling_instead_of_cropping
-                        クリッピングの代わりにスケーリングをしたい場合に指定。
-  -sof, --search_other_format
-                        指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。
-  -of [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
-                        異なるファイルフォーマットのファイル名を自動検索する場合の優先度。入力がディレクトリの場合は無効。
-  --dryrun
-                        開発用コマンド、画像を出力しない。dev__write_result_jsonと合わせて使う想定。
-  --dev__write_result_json DEV__WRITE_RESULT_JSON
-                        開発用コマンド、指定されたパスにjsonデータで処理の概要を出力する。
-  --dev__filename_with_input_params
-                        開発用コマンド、出力ファイル名にパラメータ値を含める。
-  -V, --version         show program's version number and exit
-"""

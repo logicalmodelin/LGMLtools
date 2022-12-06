@@ -7,35 +7,35 @@ usage: LGML_DummyImageCreator.py [-h] [-n NUMBER_OF_IMAGE] [-p PREFIX]
                                  [-V]
                                  output_path width height
 
-�w�肳�ꂽ�����ƃT�C�Y�Ń_�~�[�摜�𐶐����܂��B �e�L�X�g�n�̎w��͉p��݂̂ŁA{i}�͘A�Ԕԍ���{w}�͉�����{h}�͏c���ɕϊ�����܂��B
-�ŉ��s�w����\�ł��B
+指定された枚数とサイズでダミー画像を生成します。 テキスト系の指定は英語のみで、{i}は連番番号に{w}は横幅に{h}は縦幅に変換されます。
+で改行指定も可能です。
 
 positional arguments:
-  output_path           �摜���A�E�g�v�b�g����t�H���_
-  width                 �o�͉摜�̉���
-  height                �o�͉摜�̍���
+  output_path           画像をアウトプットするフォルダ
+  width                 出力画像の横幅
+  height                出力画像の高さ
 
 optional arguments:
   -h, --help            show this help message and exit
   -n NUMBER_OF_IMAGE, --number_of_image NUMBER_OF_IMAGE
-                        �o�͉摜��
+                        出力画像数
   -p PREFIX, --prefix PREFIX
-                        �o�͉摜���̐ړ���
+                        出力画像名の接頭語
   -s SUFFIX, --suffix SUFFIX
-                        �o�͉摜���̐ڔ���
+                        出力画像名の接尾語
   -fmt FORMAT, --format FORMAT
-                        �G�N�X�|�[�g�摜�t�H�[�}�b�g�̎w��
+                        エクスポート画像フォーマットの指定
   -c COLOR, --color COLOR
-                        �F�̎w��(16�i��6����)
+                        色の指定(16進数6文字)
   -tc TEXT_COLOR, --text_color TEXT_COLOR
-                        �����F�̎w��(16�i��6����) �w��Ȃ��ꍇ�w�i�F�̕�F
+                        文字色の指定(16進数6文字) 指定ない場合背景色の補色
   -t TITLE, --title TITLE
-                        �摜�ɖ��ߍ��ރ^�C�g������
+                        画像に埋め込むタイトル文字
   -zp ZERO_PADDING, --zero_padding ZERO_PADDING
-                        �摜INDEX�ԍ���0�ł��߂錅���B
+                        画像INDEX番号を0でうめる桁数。
   --center_text CENTER_TEXT
-                        �摜�����ɖ��ߍ��ޕ���
+                        画像中央に埋め込む文字
   --bottom_contents BOTTOM_CONTENTS
-                        �摜�E���ɖ��ߍ��ޕ���
-  --force               �㏑���m�F�����t�@�C���������o����
+                        画像右下に埋め込む文字
+  --force               上書き確認せずファイルを書き出すか
   -V, --version         show program's version number and exit

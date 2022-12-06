@@ -11,7 +11,9 @@ from pprint import pprint
 tool_path: Path = Path(__file__).absolute().parent.parent / Path("LGML_ImageSizeAdjuster/LGMLImageSizeAdjuster.py")
 assert tool_path.exists()
 images_folder: Path = Path(__file__).parent / Path("images")
+images_folder2: Path = Path(__file__).parent / Path("images2")
 temp_folder: Path = Path(__file__).parent / Path("temp_for_test")
+temp_sub_folder_path: Path = temp_folder / Path("sub_folder")
 debug_json_path: Path = temp_folder / Path("result.json")
 
 
@@ -51,19 +53,21 @@ def _get_command_base(
         result_as_json: bool = True,
         filename_with_input_params: bool = True,
         dryrun: bool = False,
+        force:bool = False,
+        overwrite_err: bool = False,
         additional: List[str] = None) -> List[str]:
     commands: List[str]
     if debug_json_path.exists():
         os.unlink(debug_json_path)
     image_paths: List[Path] = []
     if isinstance(images_or_dir, List):
-        # files
+        # files or dirs
         for i in images_or_dir:
-            image_file: Path = Path(__file__).parent.absolute() / Path(i)
-            # assert image_file.exists()
+            image_file: Path = Path(i)
+            # assert image_file.exists()  # テストとしては存在しないものを渡すこともある
             image_paths.append(image_file)
     else:
-        # dir
+        # a file or dir
         image_paths.append(Path(images_or_dir))
     commands = [
         "py",
@@ -90,8 +94,12 @@ def _get_command_base(
             ]
     if preferred_direction is not None:
         commands += ["--preferred_direction", preferred_direction]
+    if force:
+        commands.append("--force")
     if dryrun:
         commands.append("--dryrun")
+    if overwrite_err:
+        commands.append("--overwrite_err")
     if result_as_json:
         commands.append("--dev__write_result_json")
         commands.append(debug_json_path.as_posix())
@@ -104,8 +112,12 @@ def _get_command_base(
 
 
 def _execute_command(commands: List[str], print_result: bool = True) -> dict:
-    result = subprocess.run(commands, stdout=subprocess.PIPE).stdout.decode()
-    print(result)
+    try:
+        result: subprocess.CompletedProcess = subprocess.check_output(commands)
+        print(result.decode())
+    except subprocess.CalledProcessError as err:
+        print(err)
+        return None
     o: dict = None
     if debug_json_path.exists():
         with open(debug_json_path, "r") as fp:
@@ -304,32 +316,137 @@ def main():
             shutil.copy(images_folder / "test1920x1080.png", temp_folder)  # 上書きが起こるのでいったんコピー
             o = _execute_command(
                 _get_command_base(
-                    temp_folder / "test1920x1080.png", 100, 640,
-                    no_output_param=True, filename_with_input_params=False, additional=["--force"]))
+                    temp_folder.as_posix(), 100, 640,
+                    no_output_param=True, filename_with_input_params=False, force=True))
             assert (temp_folder / Path("test1920x1080.png")).exists()
 
-            #
+            # フォルダ入力テスト
             # # # ディレクトリ出力
             _clear_temp_folder()
             o = _execute_command(
                 _get_command_base(images_folder.as_posix(), 200, 640, out=temp_folder.as_posix(),
-                                  filename_with_input_params=False, additional=["--force"]))
+                                  filename_with_input_params=False, force=True))
             assert (temp_folder / Path("test1080x1920.png")).exists()
             assert (temp_folder / Path("test1920x1080.png")).exists()
             assert (temp_folder / Path("test_640x427.png")).exists()
 
+            # フォルダ入力テスト
             # # ファイル出力
             _clear_temp_folder()
             o = _execute_command(
                 _get_command_base(images_folder.as_posix(), 300, 640, out=(temp_folder / "test{i}.png").as_posix(),
                                   filename_with_input_params=False, additional=["--search_other_format"]))
             assert (temp_folder / Path("test0.png")).exists()
+            assert (temp_folder / Path("test1.png")).exists()
+            assert (temp_folder / Path("test2.png")).exists()
 
-            # _clear_temp_folder()
-            # 複数フォルダ入力テスト dryrun
+            # 複数フォルダ入力テスト
+            # # デフォ出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base([images_folder.as_posix(), images_folder2.as_posix()], 300, 640,
+                                  no_output_param=True, dryrun=True,  # 全部上書きしちゃうのでdryrun
+                                  filename_with_input_params=False, force=True))
+            assert len(o["items"]) == 6
+            assert o["items"][2]["result"]["output_file_path"].endswith(r"images/test_640x427.png")
+            assert o["items"][5]["result"]["output_file_path"].endswith(r"images2/test_640x427.png")
 
-            # _clear_temp_folder()
-            # 複数フォルダ入力テスト dryrun
+            # 複数フォルダ入力テスト
+            # # ファイル出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base([images_folder.as_posix(), images_folder2.as_posix()], 300, 640,
+                                  out=(temp_folder / "test{i}.png").as_posix(),
+                                  filename_with_input_params=False, additional=["--search_other_format"]))
+            assert (temp_folder / Path("test0.png")).exists()
+            assert (temp_folder / Path("test1.png")).exists()
+            assert (temp_folder / Path("test2.png")).exists()
+            assert (temp_folder / Path("test3.png")).exists()
+            assert (temp_folder / Path("test4.png")).exists()
+            assert (temp_folder / Path("test5.png")).exists()
+
+            # 複数フォルダ入力テスト
+            # # フォルダ出力
+            _clear_temp_folder()
+            # 書き出し重複エラーになる
+            o = _execute_command(
+                _get_command_base(
+                    [images_folder.as_posix(), images_folder2.as_posix()], 300, 640,
+                    out=temp_folder.as_posix(), dryrun=True,
+                    filename_with_input_params=False))
+            assert o is None  # エラーが起きた、の意味
+
+            # 複数画像入力テスト
+            # # デフォ出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(image_list2, 640, 320,
+                                  no_output_param=True,
+                                  filename_with_input_params=False,  # 同名上書きになる
+                                  force=True,  # 上書きOKになる
+                                  dryrun=True))  # inputr dir にファイル上書きしてしまうので dryrun
+            assert len(o["items"]) == 2
+            assert o["items"][0]["result"]["output_file_path"].endswith("images/test1080x1920.png")
+            assert o["items"][1]["result"]["output_file_path"].endswith("images/test1920x1080.png")
+
+            # 複数画像入力テスト
+            # # ファイル出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(image_list2, 640, 320,
+                                  filename_with_input_params=True,
+                                  out=(temp_folder / "hoge.jpg").as_posix(),
+                                  dryrun=True))
+            assert o is None  # 上書きエラー
+
+            # 複数画像入力テスト
+            # # デフォ出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(image_list2, 640, 320,
+                                  no_output_param=True,
+                                  filename_with_input_params=False,  # 同名上書きになる
+                                  force=True,  # 上書きOKになる
+                                  dryrun=True))  # inputr dir にファイル上書きしてしまうので dryrun
+            assert len(o["items"]) == 2
+            assert o["items"][0]["result"]["output_file_path"].endswith("images/test1080x1920.png")
+            assert o["items"][1]["result"]["output_file_path"].endswith("images/test1920x1080.png")
+
+            # 複数画像入力テスト
+            # # ファイル出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(image_list2, 640, 320,
+                                  filename_with_input_params=True,
+                                  out=(temp_folder / "hoge.jpg").as_posix(),
+                                  dryrun=True))
+            assert o is None  # 上書きエラー
+
+            # 複数画像入力テスト
+            # # ファイル名指定出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(image_list2, 640, 320,
+                                  filename_with_input_params=False,
+                                  out=(temp_folder / "hoge{i}.jpg").as_posix(),
+                                  force=True,
+                                  dryrun=True))
+            assert len(o["items"]) == 2
+            assert o["items"][0]["result"]["output_file_path"].endswith("temp_for_test/hoge0.jpg")
+            assert o["items"][1]["result"]["output_file_path"].endswith("temp_for_test/hoge1.jpg")
+
+            # 複数画像入力テスト
+            # # ディレクトリ出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(image_list2, 640, 320,
+                                  filename_with_input_params=False,
+                                  out=temp_folder.as_posix(),
+                                  force=True,
+                                  dryrun=True))
+            assert len(o["items"]) == 2
+            assert o["items"][0]["result"]["output_file_path"].endswith("temp_for_test/test1080x1920.png")
+            assert o["items"][1]["result"]["output_file_path"].endswith("temp_for_test/test1920x1080.png")
 
         def test6():
             _clear_temp_folder()
@@ -358,13 +475,67 @@ def main():
                     out=(temp_folder / Path("{w}x{h}.jpg")).as_posix(), filename_with_input_params=False))
             assert (temp_folder / Path("640x320.jpg")).exists()
 
+        def test9():
+            # フォルダ自動作成
+
+            # 単一画像入力テスト
+            _clear_temp_folder()
+            assert not temp_sub_folder_path.exists()
+            o = _execute_command(
+                _get_command_base(
+                    image_list1, 640, 320,
+                    out=temp_sub_folder_path.as_posix()))
+            assert temp_sub_folder_path.exists()
+
+            # 複数画像入力テスト
+            _clear_temp_folder()
+            assert not temp_sub_folder_path.exists()
+            o = _execute_command(
+                _get_command_base(
+                    image_list2, 640, 320,
+                    out=temp_sub_folder_path.as_posix()))
+            assert temp_sub_folder_path.exists()
+
+            # フォルダ入力テスト
+            _clear_temp_folder()
+            assert not temp_sub_folder_path.exists()
+            o = _execute_command(
+                _get_command_base(
+                    images_folder.as_posix(), 640, 320,
+                    out=temp_sub_folder_path.as_posix()))
+            assert temp_sub_folder_path.exists()
+
+        def test10():
+
+            # 上書きエラーテスト
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(image_list1, 640, 320, no_output_param=True,
+                                  filename_with_input_params=False,  # 同名上書きになる
+                                  force=True,  # 上書きOKになる
+                                  dryrun=True))
+            assert o is not None
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(image_list1, 640, 320, no_output_param=True,
+                                  filename_with_input_params=False,  # 同名上書きになる
+                                  overwrite_err=True,  # 上書きerrorになる
+                                  dryrun=True))
+            assert o is None
+
+        def testA():
+            # 新規テスト開発中の単独実行用
+            pass
+
         def _clear_temp_folder():
             files: List[str] = []
             for fmt in all_format:
                 files += list(temp_folder.glob("*.{}".format(fmt)))
             for f in files:
-                print("unlink {}".format(f))
+                # print("unlink {}".format(f))
                 os.unlink(f)
+            if temp_sub_folder_path.exists():
+                shutil.rmtree(temp_sub_folder_path)
 
         test1()
         test2()
@@ -374,6 +545,9 @@ def main():
         test6()
         test7()
         test8()
+        test9()
+        test10()
+        testA()
 
     except AssertionError as err:
         _print_result(o)
@@ -383,3 +557,4 @@ def main():
 if __name__ == "__main__":
     # _print_help()
     main()
+
