@@ -26,15 +26,14 @@ optional arguments:
   -s SIZE SIZE, --size SIZE SIZE
                         出力画像の横幅と高さ。０指定で入力画像と同じサイズを示す。
   -o OUTPUT, --output OUTPUT
-                        アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。指定されタフォルダが存在しない場合、自動で作られる。
-                        {p},{n},{w},{h},{i}という記述はそれぞれ、
-                        入力ファイルの親フォルダパス（最後のスラッシュは含まない）、入力ファイル名の拡張子を除いた部分・横幅・縦幅・処理番号に変数展開される。
+                        アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。指定されタフォルダが存在しない場合、自動で作られる。{p},{n},{w},{h},{i}という記述はそれぞ 
+れ、入力ファイルの親フォルダパス（最後のスラッシュは含まない）、入力ファイル名の拡張子を除いた部分・横幅・縦幅・処理番号に変数展開される。
   -f, --force           処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。
   -owerr, --overwrite_err
                         ファイル上書き時はエラーで止める。forceより優先。
   -pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}, --preferred_direction {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}
-                        リサイズ後に縦横比が合わない場合の優先方向指定。 auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。 auto_clip指定の場合はクリップが発生する方
-向を優先(できるかぎり大きく)。 実際にクリップ・パディングするしないは別オプションで指定する。
+                        リサイズ後に元画像と縦横比が合わない場合、優先処理する方向をWIDTHまたはHEIGHTで指定。 AUTO_PAD指定の場合はクリップしないですむ方向を優先。(小さくなっても元画像全体 
+を表示) AUTO_CROP指定の場合はクリップが発生する方向を優先。(見きれてもできるかぎり大きく表示)
   -rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}, --resampling {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}
                         リサイズ時のピクセル補完方法。
   --padding_color PADDING_COLOR

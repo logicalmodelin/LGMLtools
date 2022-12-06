@@ -519,10 +519,9 @@ def main() -> None:
         "-pd", "--preferred_direction", default="HEIGHT",
         choices=PreferredDirections.get_all(),
         help="\n".join([
-            "リサイズ後に縦横比が合わない場合の優先方向指定。",
-            "auto指定の場合はクリップしないですむ方向(全部の画像エリアを保持)を優先。",
-            "auto_clip指定の場合はクリップが発生する方向を優先(できるかぎり大きく)。",
-            "実際にクリップ・パディングするしないは別オプションで指定する。"
+            "リサイズ後に元画像と縦横比が合わない場合、優先処理する方向をWIDTHまたはHEIGHTで指定。",
+            "AUTO_PAD指定の場合はクリップしないですむ方向を優先。(小さくなっても元画像全体を表示)",
+            "AUTO_CROP指定の場合はクリップが発生する方向を優先。(見きれてもできるかぎり大きく表示)",
         ])
     )
     parser.add_argument(
