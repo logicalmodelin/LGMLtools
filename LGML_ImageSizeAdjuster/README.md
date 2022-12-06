@@ -1,11 +1,13 @@
 # LGMLtoolsImageSizeAdjuster
 
-画像サイズをいい感じに調整してくれるコマンドツールです。を置くつもりの場所です。
+画像サイズをいい感じに調整してくれるコマンドツールです。
 
 python3.7とかで動くと思います。あまりマイナーバージョン気にしてません。
-だいたいPillowが必要です。あと適当に足りなければモジュール入れてください。
+Pillowが必要です。あともし適当に足りなければモジュール入れてください。
 
 # usage
+
+以下のコマンドで動きますが、決まった使い方をする場合batファイルなどで呼び出すと便利です。
 
 ```
 usage: LGMLImageSizeAdjuster.py [-h] [-s SIZE SIZE] [-o OUTPUT] [-f] [-owerr] [-pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}] [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}]
