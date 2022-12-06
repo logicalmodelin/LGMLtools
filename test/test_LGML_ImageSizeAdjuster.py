@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import os
 import sys
@@ -46,8 +47,10 @@ def _print_help():
 def _get_command_base(
         images_or_dir: Union[str, List[str]], width: int, height: int, preferred_direction: str = None,
         out: str = None,
+        no_output_param: bool = False,
         result_as_json: bool = True,
         filename_with_input_params: bool = True,
+        dryrun: bool = False,
         additional: List[str] = None) -> List[str]:
     commands: List[str]
     if debug_json_path.exists():
@@ -74,18 +77,21 @@ def _get_command_base(
         "-hpx",
         str(height),
     ]
-    if out is None:
-        commands += [
-            "-o",
-            temp_folder.as_posix()
-        ]
-    else:
-        commands += [
-            "-o",
-            out
-        ]
+    if not no_output_param:
+        if out is None:
+            commands += [
+                "-o",
+                temp_folder.as_posix()
+            ]
+        else:
+            commands += [
+                "-o",
+                out
+            ]
     if preferred_direction is not None:
         commands += ["--preferred_direction", preferred_direction]
+    if dryrun:
+        commands.append("--dryrun")
     if result_as_json:
         commands.append("--dev__write_result_json")
         commands.append(debug_json_path.as_posix())
@@ -98,7 +104,8 @@ def _get_command_base(
 
 
 def _execute_command(commands: List[str], print_result: bool = True) -> dict:
-    subprocess.run(commands, stdout=subprocess.PIPE).stdout.decode()
+    result = subprocess.run(commands, stdout=subprocess.PIPE).stdout.decode()
+    print(result)
     o: dict = None
     if debug_json_path.exists():
         with open(debug_json_path, "r") as fp:
@@ -287,24 +294,42 @@ def main():
             assert o["items"][0]["result"]["processed"] == "SCALE"
 
         def test5():
-            _clear_temp_folder()
             # 複数画像入力テスト
             #   デフォ出力、ファイル出力、ディレクトリ出力
             #   フォルダ自動作成
 
             # フォルダ入力テスト
-            #   デフォ出力、ファイル出力、ディレクトリ出力
+            # # デフォ出力
+            _clear_temp_folder()
+            shutil.copy(images_folder / "test1920x1080.png", temp_folder)  # 上書きが起こるのでいったんコピー
             o = _execute_command(
-                _get_command_base(images_folder.as_posix(), 640, 640, out=temp_folder.as_posix(),
-                                  filename_with_input_params=False))
+                _get_command_base(
+                    temp_folder / "test1920x1080.png", 100, 640,
+                    no_output_param=True, filename_with_input_params=False, additional=["--force"]))
+            assert (temp_folder / Path("test1920x1080.png")).exists()
+
+            #
+            # # # ディレクトリ出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(images_folder.as_posix(), 200, 640, out=temp_folder.as_posix(),
+                                  filename_with_input_params=False, additional=["--force"]))
             assert (temp_folder / Path("test1080x1920.png")).exists()
             assert (temp_folder / Path("test1920x1080.png")).exists()
             assert (temp_folder / Path("test_640x427.png")).exists()
 
+            # # ファイル出力
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(images_folder.as_posix(), 300, 640, out=(temp_folder / "test{i}.png").as_posix(),
+                                  filename_with_input_params=False, additional=["--search_other_format"]))
+            assert (temp_folder / Path("test0.png")).exists()
+
             # _clear_temp_folder()
-            # o = _execute_command(
-            #     _get_command_base(images_folder.as_posix(), 640, 640, out=(temp_folder / "test{i}.png").as_posix(),
-            #                       filename_with_input_params=False, additional=["--search_other_format"]))
+            # 複数フォルダ入力テスト dryrun
+
+            # _clear_temp_folder()
+            # 複数フォルダ入力テスト dryrun
 
         def test6():
             _clear_temp_folder()
@@ -341,7 +366,6 @@ def main():
                 print("unlink {}".format(f))
                 os.unlink(f)
 
-        _clear_temp_folder()
         test1()
         test2()
         test3()

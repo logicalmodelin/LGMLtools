@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image
 from typing import List, Tuple, Any, Dict, ClassVar, Literal, Callable, Union
 from enum import Enum, auto
+from pprint import pprint
 # from strenum import StrEnum
 
 
@@ -78,7 +79,7 @@ class Processed(Enum):
 
 
 class ProcessInfo:
-    source_file_name: str
+    source_path: Path
     width: int
     height: int
     image: Image.Image
@@ -96,9 +97,9 @@ class ProcessInfo:
     output_path: Path
     _log: List[str]
 
-    def __init__(self, image: Image.Image, file_name: str, resampling: Resampling, output_path: Path):
+    def __init__(self, image: Image.Image, source_path: Path, resampling: Resampling, output_path: Path):
         self.image = image
-        self.source_file_name = file_name
+        self.source_path = source_path
         self.source_width = image.width
         self.source_height = image.height
         self.source_pixel_ratio = image.width / image.height
@@ -106,6 +107,9 @@ class ProcessInfo:
         self.output_path = output_path
         self.processed = Processed.RESIZE_ONLY
         self._log = []
+
+    def as_filenames_str(self):
+        return "[ProcessInfo] {} -> {}".format(self.source_path, self.output_path)
 
     # @property
     # def is_output_dir(self) -> bool:
@@ -116,8 +120,12 @@ class ProcessInfo:
         return self.width / self.height
 
     @property
+    def source_base_name(self) -> str:
+        return self.source_path.name
+
+    @property
     def file_format(self) -> str:
-        return os.path.splitext(self.self.source_file_name)[1]
+        return os.path.splitext(self.self.source_base_name)[1]
 
     def add_log(self, s: str) -> None:
         # 自動テストの関係で、とりあえず日本語は渡さないようにする
@@ -168,7 +176,7 @@ def _resize_by_width(info: ProcessInfo, nolog=True) -> Image.Image:
     resize: Tuple = (info.width, int(info.image.height * ratio))
     img: Image.Image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
     if not nolog:
-        print("resize {}: {} -> {}".format(info.source_file_name, size, resize))
+        print("resize {}: {} -> {}".format(info.source_base_name, size, resize))
     return img
 
 
@@ -181,7 +189,7 @@ def _resize_by_height(info: ProcessInfo, nolog=True) -> Image.Image:
     resize: Tuple = (int(info.image.width * ratio), info.height)
     img: Image.Image = info.image.resize(resize, Resampling.get_resampling(info.resampling))
     if not nolog:
-        print("resize {}: {} -> {}".format(info.source_file_name, size, resize))
+        print("resize {}: {} -> {}".format(info.source_base_name, size, resize))
     return img
 
 
@@ -271,16 +279,71 @@ def _resize_image(info: ProcessInfo) -> Image:
         return _clip_or_scale_or_padding(image, info)
 
 
-def _modify_output_path(input_path: str, output_path: str, w: int, h: int, index: int) -> Path:
+def _modify_output_path(input_path: str, output_path: Path, w: int, h: int, index: int) -> Path:
     """
     出力ファイル名の変数展開
     """
-    output_path = output_path.replace("{n}", os.path.splitext(
-        os.path.basename(input_path))[0]).replace("{w}", str(w)).replace("{h}", str(h)).replace("{i}", str(index))
-    return Path(output_path)
-
+    return Path(output_path.as_posix().replace("{n}", os.path.splitext(
+        os.path.basename(input_path))[0]).replace("{w}", str(w)).replace(
+        "{h}", str(h)).replace("{i}", str(index)))
 
 def _create_process_info(args: Any) -> List[ProcessInfo]:
+    """
+    実際の処理前に処理設計情報（ProcessInfo）を画像の枚数分作成する。
+    """
+    padding_color: int = _get_padding_color(args)
+    other_formats: List[str] = args.other_formats if args.search_other_format else []
+    image_file_infos: List[ProcessInfo] = []
+
+    for image_file in args.image_files:
+        image_file_path: Path = Path(image_file)
+        output_path: Path = Path(args.output) if args.output else image_file_path
+
+        # 変数展開でiやnを使うと全てのファイル上書きを回避できるのでエラーにしない
+        # if (len(args.image_files) > 1 or image_file_path.is_dir()) and not is_output_dir:
+        #     print("読み込み対象がディレクトリや複数ファイルの場合は出力先もディレクトリにする必要があります。", file=sys.stderr)
+        #     sys.exit(1)
+
+        def create_info(im: Image.Image, source_path: Path, output_path_: Path):
+            """
+            infoに基本情報を付与して一覧に加える
+            """
+            index: int = len(image_file_infos)
+            if output_path_.is_dir():
+                output_path_ = output_path_ / source_path.name
+            output_path_ = _modify_output_path(source_path, output_path_, args.width, args.height, index)
+            pi = ProcessInfo(im, source_path, Resampling[args.resampling], output_path_)
+            pi.width = args.width
+            pi.height = args.height
+            pi.preferred_direction = PreferredDirections[args.preferred_direction]
+            pi.padding_color = padding_color
+            pi.scaling_instead_of_padding = args.scaling_instead_of_padding
+            pi.scaling_instead_of_cropping = args.scaling_instead_of_cropping
+            image_file_infos.append(pi)
+
+        if image_file_path.is_dir():
+            # もし読み込み指定がディレクトリなら画像ぽい物を探す
+            for f in os.listdir(image_file_path):
+                _, ext = os.path.splitext(f)
+                if not ext:
+                    continue
+                if ext[1:] not in TARGET_FORMATS:
+                    continue
+                image, fp = _open_image(image_file_path / f, other_formats)
+                if image:
+                    create_info(image, fp, output_path)
+        else:
+            # 読み込み対象が画像なので
+            image, fp = _open_image(image_file_path, other_formats)
+            if image:
+                create_info(image, fp, output_path)
+
+    _check_info_list(image_file_infos, other_formats)
+
+    return image_file_infos
+
+
+def _get_padding_color(args) -> int:
     padding_color_str: str = args.padding_color
     if len(padding_color_str) == 8:
         padding_color_str = padding_color_str
@@ -293,69 +356,55 @@ def _create_process_info(args: Any) -> List[ProcessInfo]:
     padding_color_str = \
         padding_color_str[0:2] + padding_color_str[6:8] + padding_color_str[4:6] + padding_color_str[2:4]
     padding_color: int = int('0x' + padding_color_str, 16)
+    return padding_color
 
-    assert (len(padding_color_str) == 6 or len(padding_color_str) == 8)
-    other_formats: List[str] = []
-    if args.search_other_format:
-        other_formats = args.other_formats
-    image_file_infos: List[ProcessInfo] = []
 
-    for image_file_index, image_file in enumerate(args.image_files):
-        info: ProcessInfo = None
-        image_file_path: Path = Path(image_file)
-        output_path: Path
-        if not args.output:
-            output_path = image_file_path
-        else:
-            output_path = _modify_output_path(image_file, args.output, args.width, args.height, image_file_index)
+def _check_info_list(image_file_infos: List[ProcessInfo], other_formats: List[str]):
+    """
+    ProcessInfo全ての整合性チェック
+    """
 
-        is_target_dir: bool = image_file_path.is_dir()
-        is_output_dir: bool = output_path.is_dir()
+    def print_info_all():
+        for i, x in enumerate(image_file_infos):
+            print("#{} {}".format(i, x.as_filenames_str()))
 
-        # 変数展開でiやnを使うと全てのファイル上書きを回避できるのでエラーにしない
-        # if (len(args.image_files) > 1 or is_target_dir) and not is_output_dir:
-        #     print("読み込み対象がディレクトリや複数ファイルの場合は出力先もディレクトリにする必要があります。", file=sys.stderr)
-        #     sys.exit(1)
+    def check_info_count():
+        """
+        書き出し存在チェック
+        """
+        if len(image_file_infos) == 0:
+            print("入力となる画像がありません: {}".format(
+                    " ({})".format(" | ".join(other_formats)) if len(other_formats) > 0 else ""
+                ),
+                file=sys.stderr)
+            sys.exit(1)
 
-        # 処理対象のImage一覧を作る
-        image: Image.Image
+    def check_duplicated_info_output():
+        """
+        # 書き出し重複チェック
+        """
+        counts: dict = {}
+        duplicated_output_path: dict = {}
+        x: ProcessInfo
+        for x in image_file_infos:
+            p = x.output_path.as_posix()
+            if p not in counts:
+                counts[p] = 0
+            counts[p] += 1
+        k: str
+        v: int
+        for k, v in counts.items():
+            if v > 1:
+                duplicated_output_path[k] = v
+        if len(duplicated_output_path.keys()) > 0:
+            print("出力ファイル指定に重複ができています。\n{}".format(
+                "\n".join(["\t{} x {}".format(x, duplicated_output_path[x]) for x in duplicated_output_path.keys()])),
+                file=sys.stderr)
+            sys.exit(1)
 
-        def append_info(info_: ProcessInfo):
-            info_.width = args.width
-            info_.height = args.height
-            info_.preferred_direction = PreferredDirections[args.preferred_direction]
-            info_.padding_color = padding_color
-            info_.scaling_instead_of_padding = args.scaling_instead_of_padding
-            info_.scaling_instead_of_cropping = args.scaling_instead_of_cropping
-            info_.image = image
-            image_file_infos.append(info_)
-
-        if is_target_dir:
-            # もし読み込み指定がディレクトリなら画像ぽい物を探す
-            for f in os.listdir(image_file_path):
-                _, ext = os.path.splitext(f)
-                if not ext:
-                    continue
-                if ext[1:] not in TARGET_FORMATS:
-                    continue
-                image, fp = _open_image(image_file_path / f, other_formats)
-                if image:
-                    info = ProcessInfo(image, fp.name, Resampling[args.resampling], output_path)
-                    append_info(info)
-        else:
-            image, fp = _open_image(image_file_path, other_formats)
-            if image:
-                info = ProcessInfo(image, fp.name, Resampling[args.resampling], output_path)
-                append_info(info)
-
-    if len(image_file_infos) == 0:
-        print("no image input: {}{}".format(
-                image_file_path.as_posix(),
-                " ({})".format(" | ".join(other_formats)) if len(other_formats) > 0 else ""
-            ),
-            file=sys.stderr)
-        sys.exit(1)
-    return image_file_infos
+    print_info_all()
+    check_info_count()
+    check_duplicated_info_output()
 
 
 def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
@@ -370,7 +419,7 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
         output_file_path: Path
 
         if info.output_path.is_dir():
-            output_file_path = info.output_path / Path(info.source_file_name)
+            output_file_path = info.output_path / Path(info.source_base_name)
         else:
             output_file_path = info.output_path
         if filename_with_input_params:
@@ -415,14 +464,14 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
                     "pixel_ratio": info.width / info.height,
                 },
                 "source": {
-                    "file_name": info.source_file_name,
+                    "file_name": info.source_base_name,
                     "width": info.source_width,
                     "height": info.source_height,
                     "pixel_ratio": info.source_pixel_ratio,
                 },
             }
             json_response["items"].append(o)
-        if not args.dev__no_image_output:
+        if not args.dryrun:
             if not output_file_path.parent.exists():
                 # フォルダがなければ作る
                 os.makedirs(output_file_path.parent)
@@ -486,11 +535,11 @@ def main() -> None:
         help="異なるファイルフォーマットのファイル名を自動検索する場合の優先度。"
              "入力がディレクトリの場合は無効。")
     parser.add_argument(
+        "--dryrun", action="store_true",
+        help="開発用コマンド、画像を出力しない。dev__write_result_jsonと合わせて使う想定。")
+    parser.add_argument(
         "--dev__write_result_json", default="", type=str,
         help="開発用コマンド、指定されたパスにjsonデータで処理の概要を出力する。")
-    parser.add_argument(
-        "--dev__no_image_output", action="store_true",
-        help="開発用コマンド、画像を出力しない。dev__write_result_jsonと合わせて使う想定。")
     parser.add_argument(
         "--dev__filename_with_input_params", action="store_true",
         help="開発用コマンド、出力ファイル名にパラメータ値を含める。")
@@ -504,7 +553,7 @@ if __name__ == "__main__":
 
 """
 usage: LGMLImageSizeAdjuster.py [-h] [-wpx WIDTH] [-hpx HEIGHT] [-o OUTPUT] [-f] [-pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}] [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}] [--padding_color PADDING_COLOR] [--scaling_instead_of_padding]
-                                [--scaling_instead_of_cropping] [-sof] [-of [OTHER_FORMATS ...]] [--dev__write_result_json DEV__WRITE_RESULT_JSON] [--dev__no_image_output] [--dev__filename_with_input_params] [-V]
+                                [--scaling_instead_of_cropping] [-sof] [-of [OTHER_FORMATS ...]] [--dev__write_result_json DEV__WRITE_RESULT_JSON] [--dryrun] [--dev__filename_with_input_params] [-V]
                                 [image_files ...]
 
 画像のサイズを適切に調整する。jpgとpngなどフォーマットの違いを修正する。ディレクトリを指定するとその中のすべてのファイルを処理対象にする。
@@ -530,10 +579,10 @@ optional arguments:
                         指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。
   -of [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
                         異なるファイルフォーマットのファイル名を自動検索する場合の優先度。入力がディレクトリの場合は無効。
+  --dryrun
+                        開発用コマンド、画像を出力しない。dev__write_result_jsonと合わせて使う想定。
   --dev__write_result_json DEV__WRITE_RESULT_JSON
                         開発用コマンド、指定されたパスにjsonデータで処理の概要を出力する。
-  --dev__no_image_output
-                        開発用コマンド、画像を出力しない。dev__write_result_jsonと合わせて使う想定。
   --dev__filename_with_input_params
                         開発用コマンド、出力ファイル名にパラメータ値を含める。
   -V, --version         show program's version number and exit
