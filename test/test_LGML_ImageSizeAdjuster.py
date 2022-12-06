@@ -19,18 +19,6 @@ debug_json_path: Path = temp_folder / Path("result.json")
 
 def _print_result(o: dict) -> None:
     pprint(o)
-    # if o is None:
-    #     print("None")
-    #     return
-    # if "command" in o:
-    #     print("[command]\n\t{}".format(o["command"]))
-    # if "items" in o:
-    #     for index, item in enumerate(o["items"]):
-    #         print("[item #{}]".format(index))
-    #         for k1, v1 in item.items():
-    #             print("    [{}]".format(k1))
-    #             for k2, v2 in v1.items():
-    #                 print("\t{}: {}".format(k2, v2))
 
 
 def _nealy_equals(a: float, b: float) -> bool:
@@ -76,9 +64,8 @@ def _get_command_base(
     for x in image_paths:
         commands.append(x.as_posix())
     commands += [
-        "-wpx",
+        "-s",
         str(width),
-        "-hpx",
         str(height),
     ]
     if not no_output_param:
@@ -475,6 +462,13 @@ def main():
                     out=(temp_folder / Path("{w}x{h}.jpg")).as_posix(), filename_with_input_params=False))
             assert (temp_folder / Path("640x320.jpg")).exists()
 
+            o = _execute_command(
+                _get_command_base(
+                    image_list1, 640, 320,
+                    dryrun=True,
+                    out=(Path("{p}/hoge.png")).as_posix(), filename_with_input_params=False))
+            assert o["items"][0]["result"]["output_file_path"].endswith("images/hoge.png")
+
         def test9():
             # フォルダ自動作成
 
@@ -555,6 +549,6 @@ def main():
 
 
 if __name__ == "__main__":
-    # _print_help()
-    main()
+    _print_help()
+    # main()
 

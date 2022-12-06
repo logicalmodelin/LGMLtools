@@ -292,8 +292,10 @@ def _modify_output_path(input_path: str, output_path: Path, w: int, h: int, inde
     出力ファイル名の変数展開
     """
     return Path(output_path.as_posix().replace("{n}", os.path.splitext(
-        os.path.basename(input_path))[0]).replace("{w}", str(w)).replace(
+        os.path.basename(input_path))[0]).replace(
+        "{p}", input_path.parent.as_posix()).replace("{w}", str(w)).replace(
         "{h}", str(h)).replace("{i}", str(index)))
+
 
 def _create_process_info(args: Any) -> List[ProcessInfo]:
     """
@@ -319,10 +321,10 @@ def _create_process_info(args: Any) -> List[ProcessInfo]:
             index: int = len(image_file_infos)
             if _is_output_dir_like(output_path):
                 output_path_ = output_path_ / source_path.name
-            output_path_ = _modify_output_path(source_path, output_path_, args.width, args.height, index)
+            output_path_ = _modify_output_path(source_path, output_path_, args.size[0], args.size[1], index)
             pi = ProcessInfo(im, source_path, Resampling[args.resampling], output_path_)
-            pi.width = args.width
-            pi.height = args.height
+            pi.width = args.size[0]
+            pi.height = args.size[1]
             pi.preferred_direction = PreferredDirections[args.preferred_direction]
             pi.padding_color = padding_color
             pi.scaling_instead_of_padding = args.scaling_instead_of_padding
@@ -423,14 +425,7 @@ def _adjust_images(image_file_infos: List[ProcessInfo], args) -> None:
     }
     for info in image_file_infos:
         image = _resize_image(info)
-        output_file_path: Path
-
-        # TODO この処理は _check_info_list でやるべき
-        if _is_output_dir_like(info.output_path):
-            output_file_path = info.output_path / Path(info.source_base_name)
-        else:
-            output_file_path = info.output_path
-
+        output_file_path: Path = info.output_path
         if filename_with_input_params:
             output_base_name = output_file_path.stem
             output_base_name += "_"
@@ -509,13 +504,13 @@ def main() -> None:
                     'ディレクトリを指定するとその中のすべてのファイルを処理対象にする。',
     )
     parser.add_argument("image_files", nargs='*',  help="処理対象となる画像ファイルまたはフォルダのパス。")
-    parser.add_argument("-wpx", "--width", type=int, help="出力画像の横幅。")
-    parser.add_argument("-hpx", "--height", type=int, help="出力画像の高さ。")
+    parser.add_argument("-s", "--size", nargs=2, type=int, default=[0, 0],
+                        help="出力画像の横幅と高さ。０指定で入力画像と同じサイズを示す。")
     parser.add_argument("-o", "--output", type=str, default="",
                         help="アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。"
                              "指定されタフォルダが存在しない場合、自動で作られる。"
-                             "{n},{w},{h},{i}という記述はそれぞれ、"
-                             "入力ファイル名の拡張を除いた部分・横幅・縦幅・処理番号に変数展開される。")
+                             "{p},{n},{w},{h},{i}という記述はそれぞれ、"
+                             "入力ファイルの親フォルダパス（最後のスラッシュは含まない）、入力ファイル名の拡張子を除いた部分・横幅・縦幅・処理番号に変数展開される。")
     parser.add_argument("-f", "--force", action="store_true",
                         help="処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。")
     parser.add_argument("-owerr", "--overwrite_err", action="store_true",
