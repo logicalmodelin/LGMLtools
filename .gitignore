@@ -132,3 +132,9 @@ dmypy.json
 **/work
 **/temp_for_test
 ~*
+*.tmp
+*.bak
+gist/*
+
+
+
