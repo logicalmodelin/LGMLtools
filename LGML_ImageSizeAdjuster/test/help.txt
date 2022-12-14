@@ -1,2 +1,42 @@
-> py D:/Work/LOGICALMODELIN/modelin_git/LGML_ImageSizeAdjuster/LGMLImageSizeAdjuster.py images/test_640x427.png -s 640 427 -o D:/Work/LOGICALMODELIN/modelin_git/test/temp_for_test --dev__write_result_json D:/Work/LOGICALMODELIN/modelin_git/test/temp_for_test/result.json --dev__filename_with_input_params
-Command '['py', 'D:/Work/LOGICALMODELIN/modelin_git/LGML_ImageSizeAdjuster/LGMLImageSizeAdjuster.py', 'images/test_640x427.png', '-s', '640', '427', '-o', 'D:/Work/LOGICALMODELIN/modelin_git/test/temp_for_test', '--dev__write_result_json', 'D:/Work/LOGICALMODELIN/modelin_git/test/temp_for_test/result.json', '--dev__filename_with_input_params']' returned non-zero exit status 1.
+usage: LGMLImageSizeAdjuster.py [-h] [-s SIZE SIZE] [-o OUTPUT] [-f] [-owerr] [-pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}] [-rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}]
+                                [--padding_color PADDING_COLOR] [--scaling_instead_of_padding] [--scaling_instead_of_cropping] [-sof] [-of [OTHER_FORMATS ...]] [--dryrun]
+                                [--dev__write_result_json DEV__WRITE_RESULT_JSON] [--dev__filename_with_input_params] [-V]
+                                [image_files ...]
+
+画像のサイズを適切に調整する。jpgとpngなどフォーマットの違いを修正する。ディレクトリを指定するとその中のすべてのファイルを処理対象にする。
+
+positional arguments:
+  image_files           処理対象となる画像ファイルまたはフォルダのパス。
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -s SIZE SIZE, --size SIZE SIZE
+                        出力画像の横幅と高さ。数値もしくは元画像サイズの％で指定する。例) 320 240, 50% 0, 0 0 など。数値の片方が0の場合、縦横比率を保って自動調整される。幅高さともに0の場合
+は入力画像と同じになる。
+  -o OUTPUT, --output OUTPUT
+                        アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。指定されタフォルダが存在しない場合、自動で作られる。{p},{n},{w},{h},{i}という記述はそれぞ 
+れ、入力ファイルの親フォルダパス（最後のスラッシュは含まない）、入力ファイル名の拡張子を除いた部分・横幅・縦幅・処理番号に変数展開される。
+  -f, --force           処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。
+  -owerr, --overwrite_err
+                        ファイル上書き時はエラーで止める。forceより優先。
+  -pd {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}, --preferred_direction {WIDTH,HEIGHT,AUTO_PAD,AUTO_CROP}
+                        リサイズ後に元画像と縦横比が合わない場合、優先処理する方向をWIDTHまたはHEIGHTで指定。 AUTO_PAD指定の場合はクリップしないですむ方向を優先。(小さくなっても元画像全体 
+を表示) AUTO_CROP指定の場合はクリップが発生する方向を優先。(見きれてもできるかぎり大きく表示)
+  -rs {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}, --resampling {NEAREST,BOX,BILINEAR,HAMMING,BICUBIC,LANCZOS}
+                        リサイズ時のピクセル補完方法。
+  --padding_color PADDING_COLOR
+                        パディング色をARGB値16進数8桁もしくはRGB値16進数6桁で指定。透明度指定は出力フォーマットがjpg/bmp/gifの場合無視される。
+  --scaling_instead_of_padding
+                        パディングの代わりにスケーリングをしたい場合に指定。
+  --scaling_instead_of_cropping
+                        クリッピングの代わりにスケーリングをしたい場合に指定。
+  -sof, --search_other_format
+                        指定ファイルパスの画像が見つからない際に、別のフォーマットを入力に採用する。
+  -of [OTHER_FORMATS ...], --other_formats [OTHER_FORMATS ...]
+                        異なるファイルフォーマットのファイル名を自動検索する場合の優先度。入力がディレクトリの場合は無効。
+  --dryrun              開発用コマンド、画像を出力しない。dev__write_result_jsonと合わせて使う想定。
+  --dev__write_result_json DEV__WRITE_RESULT_JSON
+                        開発用コマンド、指定されたパスにjsonデータで処理の概要を出力する。
+  --dev__filename_with_input_params
+                        開発用コマンド、出力ファイル名にパラメータ値を含める。
+  -V, --version         show program's version number and exit

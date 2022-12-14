@@ -36,13 +36,13 @@ def _print_help():
 
 
 def _get_command_base(
-        images_or_dir: Union[str, List[str]], width: int, height: int, preferred_direction: str = None,
+        images_or_dir: Union[str, List[str]], width: Union[int, str], height: Union[int, str], preferred_direction: str = None,
         out: str = None,
         no_output_param: bool = False,
         result_as_json: bool = True,
         filename_with_input_params: bool = True,
         dryrun: bool = False,
-        force:bool = False,
+        force: bool = False,
         overwrite_err: bool = False,
         additional: List[str] = None) -> List[str]:
     commands: List[str]
@@ -135,6 +135,26 @@ def main():
     # _print_help()
 
     try:
+
+        # サイズ指定チェック
+        def test0():
+            _clear_temp_folder()
+            o = _execute_command(
+                _get_command_base(image_list1, "0", "0", no_output_param=True, dryrun=True))
+            assert o["items"][0]["result"]["width"] == 640
+            assert o["items"][0]["result"]["height"] == 427
+            o = _execute_command(
+                _get_command_base(image_list1, "320", "0", no_output_param=True, dryrun=True))
+            assert o["items"][0]["result"]["width"] == 320
+            assert o["items"][0]["result"]["height"] == 213
+            o = _execute_command(
+                _get_command_base(image_list1, "0", "213", no_output_param=True, dryrun=True))
+            assert o["items"][0]["result"]["width"] == 319
+            assert o["items"][0]["result"]["height"] == 213
+            o = _execute_command(
+                _get_command_base(image_list1, "100%", "50%", no_output_param=True, dryrun=True))
+            assert o["items"][0]["result"]["width"] == 640
+            assert o["items"][0]["result"]["height"] == 213
 
         # ######### HEIGHT優先挙動チェック ######### #
 
@@ -532,6 +552,7 @@ def main():
             if temp_sub_folder_path.exists():
                 shutil.rmtree(temp_sub_folder_path)
 
+        test0()
         test1()
         test2()
         test3()
@@ -552,4 +573,3 @@ def main():
 if __name__ == "__main__":
     # _print_help()
     main()
-
