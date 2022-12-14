@@ -14,6 +14,58 @@ from pprint import pprint
 TARGET_FORMATS: Tuple[str] = ("png", "jpg", "gif", "bmp", "tif", "tga")  # StrEnumにする？
 
 
+class ImageSize:
+
+    width: str
+    height: str
+
+    def __init__(self, width: str, height: str):
+        checked: bool = self._check_format(width) and self._check_format(height)
+        if not checked:
+            raise ValueError(f"Invalid Size format. {width} x {height}")
+        self.width = width
+        self.height = height
+
+    @staticmethod
+    def _check_format(size_str: str) -> bool:
+        if size_str.isdigit():
+            return True
+        elif size_str.endswith("%"):
+            return True
+        else:
+            return False
+
+    def get_actual_image_size(self, image: Image) -> Tuple[int, int]:
+        """
+        実際のイメージサイズを計算して返す
+        仕様）
+        サイズ指定が％の場合は、元のサイズに対する割合を計算する
+        数値が1以上の場合は数値そのものを返す
+        数値が0の場合は自動計算の意味で、
+        widthもheightも0の場合は画像そのものの大きさを返す
+        片方が0の場合は元の画像の比率を保った大きさに調整して返す
+        """
+        w: int
+        h: int
+        if self.width.isdigit():
+            w = int(self.width)
+        elif self.width.endswith("%"):
+            w = int(image.width * float(self.width[:-1]) / 100)
+        if self.height.isdigit():
+            h = int(self.height)
+        elif self.width.endswith("%"):
+            h = int(image.height * float(self.height[:-1]) / 100)
+        ratio: float = image.width / image.height
+        if w == 0 and h == 0:
+            return image.width, image.height
+        elif w == 0:
+            w = int(h * ratio)
+        elif h == 0:
+            h = int(w / ratio)
+        return w, h
+
+
+
 class PreferredDirections(Enum):
 
     WIDTH = auto()
@@ -301,6 +353,7 @@ def _create_process_info(args: Any) -> List[ProcessInfo]:
     """
     実際の処理前に処理設計情報（ProcessInfo）を画像の枚数分作成する。
     """
+    image_size: ImageSize = ImageSize(args.size[0], args.size[1])
     padding_color: int = _get_padding_color(args)
     other_formats: List[str] = args.other_formats if args.search_other_format else []
     image_file_infos: List[ProcessInfo] = []
@@ -321,10 +374,11 @@ def _create_process_info(args: Any) -> List[ProcessInfo]:
             index: int = len(image_file_infos)
             if _is_output_dir_like(output_path):
                 output_path_ = output_path_ / source_path.name
-            output_path_ = _modify_output_path(source_path, output_path_, args.size[0], args.size[1], index)
+            size: Tuple[int, int] = image_size.get_actual_image_size(im)
+            output_path_ = _modify_output_path(source_path, output_path_, size[0], size[1], index)
             pi = ProcessInfo(im, source_path, Resampling[args.resampling], output_path_)
-            pi.width = args.size[0]
-            pi.height = args.size[1]
+            pi.width = size[0]
+            pi.height = size[1]
             pi.preferred_direction = PreferredDirections[args.preferred_direction]
             pi.padding_color = padding_color
             pi.scaling_instead_of_padding = args.scaling_instead_of_padding
@@ -504,13 +558,18 @@ def main() -> None:
                     'ディレクトリを指定するとその中のすべてのファイルを処理対象にする。',
     )
     parser.add_argument("image_files", nargs='*',  help="処理対象となる画像ファイルまたはフォルダのパス。")
-    parser.add_argument("-s", "--size", nargs=2, type=int, default=[0, 0],
-                        help="出力画像の横幅と高さ。０指定で入力画像と同じサイズを示す。")
+    parser.add_argument("-s", "--size", nargs=2, type=str, default=["100%", "100%"],
+                        help="出力画像の横幅と高さ。数値もしくは元画像サイズの％で指定する。"
+                             "例) 320 240, 50%% 0, 0 0 など。"
+                             "数値の片方が0の場合、縦横比率を保って自動調整される。"
+                             "幅高さともに0の場合は入力画像と同じになる。"
+                        )
     parser.add_argument("-o", "--output", type=str, default="",
                         help="アウトプットファイルパス。指定ない場合入力と同じ場所に同名で上書きされる。"
                              "指定されタフォルダが存在しない場合、自動で作られる。"
                              "{p},{n},{w},{h},{i}という記述はそれぞれ、"
-                             "入力ファイルの親フォルダパス（最後のスラッシュは含まない）、入力ファイル名の拡張子を除いた部分・横幅・縦幅・処理番号に変数展開される。")
+                             "入力ファイルの親フォルダパス（最後のスラッシュは含まない）、"
+                             "入力ファイル名の拡張子を除いた部分・横幅・縦幅・処理番号に変数展開される。")
     parser.add_argument("-f", "--force", action="store_true",
                         help="処理結果ファイル保存時に同名ファイルが存在していても確認をしない場合に指定。")
     parser.add_argument("-owerr", "--overwrite_err", action="store_true",
@@ -555,7 +614,7 @@ def main() -> None:
     parser.add_argument(
         "--dev__filename_with_input_params", action="store_true",
         help="開発用コマンド、出力ファイル名にパラメータ値を含める。")
-    parser.add_argument("-V", '--version', action='version', version='%(prog)s 1.0')
+    parser.add_argument("-V", '--version', action='version', version='%(prog)s 1.1')
     args: argparse.Namespace = parser.parse_args()
     _adjust_images(_create_process_info(args), args)
 
