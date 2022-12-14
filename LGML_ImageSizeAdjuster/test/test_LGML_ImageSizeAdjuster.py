@@ -8,7 +8,8 @@ from PIL import Image
 from typing import List, Tuple, Any, ClassVar, Literal, Callable, Union
 from pprint import pprint
 
-tool_path: Path = Path(__file__).absolute().parent.parent / Path("LGML_ImageSizeAdjuster/LGMLImageSizeAdjuster.py")
+tool_path: Path = Path(__file__).absolute().parent.parent / Path("LGMLImageSizeAdjuster.py")
+print(Path(__file__).absolute().parent)
 assert tool_path.exists()
 images_folder: Path = Path(__file__).parent / Path("images")
 images_folder2: Path = Path(__file__).parent / Path("images2")
@@ -549,6 +550,6 @@ def main():
 
 
 if __name__ == "__main__":
-    _print_help()
-    # main()
+    # _print_help()
+    main()
 
