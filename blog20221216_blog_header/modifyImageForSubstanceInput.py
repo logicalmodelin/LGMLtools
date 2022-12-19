@@ -3,19 +3,19 @@ from PIL import Image
 from pathlib import Path
 import argparse
 
-target_sizes = [8192, 4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2, 1]
+TARGET_SIZES = [8192, 4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2, 1]
 
 
 def find_fit_size_power_of_2(size: tuple[int, int], force_square: bool) -> tuple[int, int]:
     w: int = -1
     h: int = -1
-    for i in range(len(target_sizes) - 1):
-        if target_sizes[i] >= size[0] > target_sizes[i + 1]:
-            w = target_sizes[i]
+    for i in range(len(TARGET_SIZES) - 1):
+        if TARGET_SIZES[i] >= size[0] > TARGET_SIZES[i + 1]:
+            w = TARGET_SIZES[i]
             break
-    for i in range(len(target_sizes) - 1):
-        if target_sizes[i] >= size[1] > target_sizes[i + 1]:
-            h = target_sizes[i]
+    for i in range(len(TARGET_SIZES) - 1):
+        if TARGET_SIZES[i] >= size[1] > TARGET_SIZES[i + 1]:
+            h = TARGET_SIZES[i]
             break
     if force_square:
         w = max(w, h)
@@ -44,10 +44,17 @@ def get_clip_position(base_size: tuple[int, int], size: tuple[int, int], valign:
     return new_pos
 
 
-def extract(img: Image, extract_size_image: str, extract_size: tuple[int, int], valign: str, align: str) -> Image:
-    if len(extract_size_image) > 0:
-        assert Path(extract_size_image).exists()
-        extract_size = PIL.Image.open(extract_size_image).size
+def extract(img: Image, extract_size_image_: str, extract_size: tuple[int, int], valign: str, align: str,
+            scale: float, force_square: bool) -> Image:
+    if len(extract_size_image_) > 0:
+        assert Path(extract_size_image_).exists()
+        extract_size_image: Image = PIL.Image.open(extract_size_image_)
+        if scale != 1.0:
+            extract_size_image = extract_size_image.resize(
+                (int(extract_size_image.size[0] * scale), int(extract_size_image.size[1] * scale)))
+        extract_size = extract_size_image.size
+        extract_size = find_fit_size_power_of_2(extract_size, force_square)
+
     new_pos: tuple[int, int] = get_clip_position(img.size, extract_size, valign, align)
     return img.crop((new_pos[0], new_pos[1], new_pos[0] + extract_size[0], new_pos[1] + extract_size[1]))
 
@@ -56,7 +63,7 @@ def resize(img: Image, scale: float, bg_color: tuple[int, int, int],
            alpha: int, valign: str, align: str, force_square: bool) -> Image:
     if scale != 1.0:
         img = img.resize((int(img.size[0] * scale), int(img.size[1] * scale)))
-    assert img.size[0] <= target_sizes[0] and img.size[1] <= target_sizes[0]
+    assert img.size[0] <= TARGET_SIZES[0] and img.size[1] <= TARGET_SIZES[0]
     col = bg_color
     new_size = find_fit_size_power_of_2(img.size, force_square)
     bg_img = PIL.Image.new(
@@ -95,7 +102,8 @@ def main() -> None:
         img = resize(img, args.scale, args.resize_bg_color, args.resize_bg_alpha,
                      args.valign, args.align, args.resize_force_square)
     elif args.mode == 'extract':
-        img = extract(img, args.extract_size_image, args.extract_size, args.valign, args.align)
+        img = extract(img, args.extract_size_image, args.extract_size, args.valign, args.align,
+                      args.scale, args.resize_force_square)
     if output_image_path.suffix == '.jpg' or output_image_path.suffix == '.gif':
         img = img.convert('RGB')
     img.save(output_image_path)
