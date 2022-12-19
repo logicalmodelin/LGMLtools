@@ -1,0 +1,32 @@
+usage: modifyImageForSubstanceInput.py [-h] [-o OUTPUT_IMAGE] [-s SCALE]
+                                       [--valign {middle,top,bottom}]
+                                       [--align {center,left,right}]
+                                       [--resize_force_square RESIZE_FORCE_SQUARE]
+                                       [--resize_bg_color RESIZE_BG_COLOR RESIZE_BG_COLOR RESIZE_BG_COLOR]
+                                       [--resize_bg_alpha RESIZE_BG_ALPHA]
+                                       [--extract_size_image EXTRACT_SIZE_IMAGE | --extract_size EXTRACT_SIZE EXTRACT_SIZE]
+                                       {resize,extract} src_image
+
+positional arguments:
+  {resize,extract}      resize: 画像をリサイズする。extract: 画像を切り抜く。
+  src_image             source image
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -o OUTPUT_IMAGE, --output_image OUTPUT_IMAGE
+                        output image file path
+  -s SCALE, --scale SCALE
+                        src image scale for resize mode, target image scale
+                        for extract mode
+  --valign {middle,top,bottom}
+  --align {center,left,right}
+  --resize_force_square RESIZE_FORCE_SQUARE
+                        If True, the output image is square. resize mode only.
+  --resize_bg_color RESIZE_BG_COLOR RESIZE_BG_COLOR RESIZE_BG_COLOR
+                        resize mode only
+  --resize_bg_alpha RESIZE_BG_ALPHA
+                        resize mode only
+  --extract_size_image EXTRACT_SIZE_IMAGE
+                        extract mode only
+  --extract_size EXTRACT_SIZE EXTRACT_SIZE
+                        extract mode only
