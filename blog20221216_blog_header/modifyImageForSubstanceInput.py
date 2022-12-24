@@ -85,7 +85,7 @@ def main() -> None:
     parser.add_argument('--resize_force_square', type=bool, default=True,
                         help='If True, the output image is square. resize mode only.')
     parser.add_argument('--resize_bg_color', type=int, nargs=3, default=[0, 0, 0], help='resize mode only')
-    parser.add_argument('--resize_bg_alpha', type=int, default=255, help='resize mode only')
+    parser.add_argument('--resize_bg_alpha', type=int, default=0, help='resize mode only')
     extract_options = parser.add_mutually_exclusive_group()
     extract_options.add_argument('--extract_size_image',
                                  type=str, default="", help='extract mode only')
@@ -115,6 +115,7 @@ if __name__ == '__main__':
 
 """
 sample command
-python modifyImageForSubstanceInput.py resize images\qbg.jpg -o images\qbg_out.jpg --valign top --align left --resize_bg_color 200 20 24 --resize_bg_alpha 33
-python modifyImageForSubstanceInput.py extract images\qbg_out.jpg -o images\qbg_out2.jpg -extract_size_image images\qbg.jpg --valign top --align left
+python modifyImageForSubstanceInput.py resize images/qbg.jpg -o images/qbg_out.png --valign top --align left --resize_bg_color 200 20 24
+python modifyImageForSubstanceInput.py extract images/qbg_out.png -o images/qbg_out2.png --extract_size_image images/qbg.jpg --valign top --align left
+python modifyImageForSubstanceInput.py extract images/qbg_out.png -o images/qbg_out3.png --extract_size 758 578 --valign top --align left
 """
