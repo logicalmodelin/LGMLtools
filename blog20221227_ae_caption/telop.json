@@ -1,0 +1,8 @@
+{
+    "telops":[
+        [2, 3, "Hello world"],
+        [7, 3, "Hello computer"],
+        [12, 3, "Hello tommorow"],
+        [17, 3, "fin"]
+    ]
+}
