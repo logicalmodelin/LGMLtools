@@ -121,7 +121,8 @@ venv.bak/
 /site
 
 # mypy
-.mypy_cache/
+.mypy_
+cache/
 .dmypy.json
 dmypy.json
 
@@ -137,6 +138,6 @@ dmypy.json
 gist/*
 local
 render
-
+backup
 
 
