@@ -66,6 +66,22 @@ def resize(img: Image, border_width: int, min_size: tuple[int, int],
     return temp_img
 
 
+def find_files(files: list[str], extensions: None | list[str] = None) -> list[Path]:
+    """
+    find files recursively
+    """
+    ret: list[Path] = []
+    for file in files:
+        p: Path = Path(file)
+        assert p.exists(), f'File not found: {file}'
+        if p.is_file():
+            if extensions is None or p.suffix in extensions:
+                ret.append(p)
+        if p.is_dir():
+            ret.extend(find_files([str(x) for x in p.iterdir()]))
+    return ret
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         # 真ん中よせ時に 半ドットずれないように注意'
@@ -74,7 +90,7 @@ def main() -> None:
                     '* 任意のサイズの余白追加　->\n' +
                     '* 最低サイズ指定あればそこまで大きくする ->\n' +
                     '* 2のべき乗吸着指定あればさらに調整')
-    parser.add_argument('src_image', type=str, help='source image')
+    parser.add_argument('src_images', type=str, nargs='*', help='source image')
     parser.add_argument('-o', '--output_dir', type=str, default='', help='output image dir')
     parser.add_argument('--overwrite', action='store_true', help='overwrite output image file')
     parser.add_argument('-bw', '--border_width', type=int, default=0, help='transparent border width')
@@ -85,27 +101,30 @@ def main() -> None:
     parser.add_argument('-bg', '--bg_color', type=int, nargs=4, default=[0, 0, 0, 0],
                         help='background color like 255 255 255 255')
     args = parser.parse_args()
-    assert Path(args.src_image).exists()
-    assert Path(args.src_image).is_file()
-    output_image_path: Path
-    if args.overwrite:
-        output_image_path = Path(args.src_image)
-    elif len(args.output_dir) > 0:
+    if len(args.output_dir) > 0:
         assert Path(args.output_dir).exists()
         assert Path(args.output_dir).is_dir()
-        output_image_path = Path(args.output_dir) / Path(Path(args.src_image).name)
-    else:
-        output_image_path = Path(args.output_dir).parent / Path(Path(args.src_image).stem + '__out.png')
 
-    img: Image = PIL.Image.open(args.src_image)
-    assert img.size[0] <= TARGET_SIZES[0] and img.size[1] <= TARGET_SIZES[0]
-    img = resize(img, args.border_width, args.min_size, tuple(args.bg_color), args.align, args.power_of_2)
+    files = find_files(args.src_images, ['.png', '.jpg', '.gif'])
+    assert len(files) > 0, 'No image file found.'
+    output_image_path: Path
+    for file in files:
+        if args.overwrite:
+            output_image_path = file
+        elif len(args.output_dir) > 0:
+            output_image_path = Path(args.output_dir) / file.name
+        else:
+            output_image_path = Path(args.output_dir).parent / Path(file.stem + '__out.png')
 
-    if output_image_path.suffix == '.jpg' or output_image_path.suffix == '.gif':
-        print('Save image format should not be jpg or gif.'
-              'This program makes image with transparent background.', file=sys.stderr)
-        img = img.convert('RGB')
-    img.save(output_image_path)
+        img: Image = PIL.Image.open(file)
+        assert img.size[0] <= TARGET_SIZES[0] and img.size[1] <= TARGET_SIZES[0]
+        img = resize(img, args.border_width, args.min_size, tuple(args.bg_color), args.align, args.power_of_2)
+
+        if output_image_path.suffix == '.jpg' or output_image_path.suffix == '.gif':
+            print('Save image format should not be jpg or gif.'
+                  'This program makes image with transparent background.', file=sys.stderr)
+            img = img.convert('RGB')
+        img.save(output_image_path)
 
 
 if __name__ == '__main__':
@@ -114,5 +133,5 @@ if __name__ == '__main__':
 
 """
 # sample command
-python prepareImageForSdInput.py images/icon.png -o out -bw 10 -al TL -p2 -min 512 512 -bg 0 0 0 0
+python prepareImageForSdInput.py images/icon.png -o out -bw 100 -al TL -p2 -min 512 512 -bg 255 0 0 255
 """
