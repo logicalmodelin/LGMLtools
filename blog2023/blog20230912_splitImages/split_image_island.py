@@ -35,9 +35,11 @@ def split(image_path: Path, output_dir_path: Path, prefix: str,
     hierarchy: np.ndarray
     contours, hierarchy = cv2.findContours(alpha_channel, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     if border > 0:
+        # 透明度の境界線を太くする
         alpha_channel = cv2.drawContours(alpha_channel, contours, -1, (255, 255, 255), border)
-    # cv2.imshow('alpha_channel', alpha_channel)
-    # cv2.waitKey(0)
+        contours, hierarchy = cv2.findContours(alpha_channel, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.imshow('alpha_channel', alpha_channel)
+    cv2.waitKey(0)
     index: int = 0
     cnt: int = 0
     skip_cnt: int = 0
