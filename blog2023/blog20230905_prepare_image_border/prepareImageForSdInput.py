@@ -1,5 +1,5 @@
 import sys
-
+from typing import List
 import PIL
 from PIL import Image
 from pathlib import Path
@@ -37,7 +37,7 @@ def get_clip_position(base_size: tuple[int, int], size: tuple[int, int], align: 
 
 
 def resize(img: Image, border_width: int, min_size: tuple[int, int],
-           bg_color: tuple[int, int, int, int], align: str, power_of_2: bool) -> Image:
+           bg_color: tuple[int, int, int, int], align: str, power_of_2: bool, square: bool) -> Image:
 
     temp_img: Image
     new_size: tuple[int, int]
@@ -60,7 +60,7 @@ def resize(img: Image, border_width: int, min_size: tuple[int, int],
 
     # convert to power of 2
     if power_of_2:
-        new_size = find_fit_size_power_of_2(new_size, force_square=False)
+        new_size = find_fit_size_power_of_2(new_size, force_square=square)
     temp_img = PIL.Image.new('RGBA', new_size, bg_color)
     temp_img.paste(img, get_clip_position(new_size, img.size, align))
     return temp_img
@@ -97,7 +97,11 @@ def main() -> None:
     parser.add_argument('-al', '--align', type=str, default='CENTER', choices=['CENTER', 'TL', 'BR'])
     parser.add_argument('-p2', '--power_of_2', action='store_true', default=False,
                         help='output image size is power of 2.')
+    parser.add_argument('-sq', '--square', action='store_true', default=False,
+                        help='output image size is square.')
     parser.add_argument('-min', '--min_size', type=int, nargs=2, default=[0, 0], help='minimum final size')
+    parser.add_argument('--auto_min_size', action="store_true", help='when more than 2 images are specified,' +
+                        'the min_size argument  is automatically determined from the size of the input image.')
     parser.add_argument('-bg', '--bg_color', type=int, nargs=4, default=[0, 0, 0, 0],
                         help='background color like 255 255 255 255')
     args = parser.parse_args()
@@ -107,6 +111,20 @@ def main() -> None:
 
     files = find_files(args.src_images, ['.png', '.jpg', '.gif'])
     assert len(files) > 0, 'No image file found.'
+
+    if args.auto_min_size:
+        min_size: List[int] = [0, 0]
+        for file in files:
+            img: Image = PIL.Image.open(file)
+            if img.size[0] > min_size[0]:
+                min_size[0] = img.size[0]
+            if img.size[1] > min_size[1]:
+                min_size[1] = img.size[1]
+        if args.min_size[0] < min_size[0]:
+            args.min_size[0] = min_size[0]
+        if args.min_size[1] < min_size[1]:
+            args.min_size[1] = min_size[1]
+
     output_image_path: Path
     for file in files:
         if args.overwrite:
@@ -118,7 +136,8 @@ def main() -> None:
 
         img: Image = PIL.Image.open(file)
         assert img.size[0] <= TARGET_SIZES[0] and img.size[1] <= TARGET_SIZES[0]
-        img = resize(img, args.border_width, args.min_size, tuple(args.bg_color), args.align, args.power_of_2)
+        img = resize(img, args.border_width, args.min_size, tuple(args.bg_color),
+                     args.align, args.power_of_2, args.square)
 
         if output_image_path.suffix == '.jpg' or output_image_path.suffix == '.gif':
             print('Save image format should not be jpg or gif.'
