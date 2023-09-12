@@ -7,7 +7,7 @@ from PIL import Image
 
 
 def split(image_path: Path, output_dir_path: Path, prefix: str,
-          cutout_alpha: int, min_size: Tuple[int, int], border: int) -> None:
+          cutout_alpha: int, min_size: Tuple[int, int], alpha_spread: int) -> None:
     """
     大きなカラー画像を透明度を元にパーツに分割する
     ※ 透明度を持たない画像はエラーになる
@@ -16,7 +16,7 @@ def split(image_path: Path, output_dir_path: Path, prefix: str,
     :param prefix: 出力ファイル名のプレフィックス
     :param cutout_alpha: 透明度の閾値(0~255)。この値以下の透明度はパーツ出力時に0にする
     :param min_size: 出力するパーツの最小サイズ これ以下のパーツは出力されない
-    :param border: パーツの透明度の境界線の太さ 太くすると近くに配置されたパーツがくっつく
+    :param alpha_spread: パーツの透明度の境界線の太さ 太くすると近くに配置されたパーツがくっつく
     """
     # MEMO: cv2は透明度のある画像をch所苦節扱えないようなのでPILも併用している
     col_image: Image = Image.open(image_path)
@@ -34,9 +34,9 @@ def split(image_path: Path, output_dir_path: Path, prefix: str,
     contours: np.ndarray  # points of contours
     hierarchy: np.ndarray
     contours, hierarchy = cv2.findContours(alpha_channel, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    if border > 0:
+    if alpha_spread > 0:
         # 透明度の境界線を太くする
-        alpha_channel = cv2.drawContours(alpha_channel, contours, -1, (255, 255, 255), border)
+        alpha_channel = cv2.drawContours(alpha_channel, contours, -1, (255, 255, 255), alpha_spread)
         contours, hierarchy = cv2.findContours(alpha_channel, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     cv2.imshow('alpha_channel', alpha_channel)
     cv2.waitKey(0)
@@ -99,8 +99,8 @@ def main():
                         help='cutout alpha threshold(0~255) for final image')
     parser.add_argument('-ms', '--min_size', type=int, nargs=2, default=(0, 0),
                         help='images smaller than this size are not exported')
-    parser.add_argument('-b', '--border', type=int, default=0,
-                        help='border size for parts alpha channel')
+    parser.add_argument('-as', '--alpha_spread', type=int, default=0,
+                        help='Spread px size for parts alpha channel, it makes parts boundary bigger.')
     args = parser.parse_args()
 
     src_image_path: Path = Path(args.src_image)
@@ -117,20 +117,20 @@ def main():
     cutout_alpha: int = args.cutout_alpha
     assert 0 <= cutout_alpha <= 255, f'cutout_alpha must be 0~255: {cutout_alpha}'
     min_size: Tuple[int, int] = args.min_size
-    border: int = args.border
-    split(src_image_path, output_dir_path, prefix, cutout_alpha, min_size, border)
+    alpha_spread: int = args.alpha_spread
+    split(src_image_path, output_dir_path, prefix, cutout_alpha, min_size, alpha_spread)
 
 
 if __name__ == '__main__':
     main()
 
 """
-python .\split_image_island.py .\images\test.png -o .\out\ -ms 100 100 --border 10 --create_subdir
+python .\split_image_island.py .\images\test.png -o .\out\ -ms 100 100 --alpha_spread 10 --create_subdir
 
 --
 
 usage: split_image_island.py [-h] [-o OUTPUT_DIR] [--create_subdir] [-ca CUTOUT_ALPHA]
-    [-ms MIN_SIZE MIN_SIZE] [-b BORDER] src_image
+    [-ms MIN_SIZE MIN_SIZE] [-b alpha_spread] src_image
 
 positional arguments:
   src_image             source image file path
@@ -144,8 +144,8 @@ options:
                         cutout alpha threshold(0~255) for final image
   -ms MIN_SIZE MIN_SIZE, --min_size MIN_SIZE MIN_SIZE
                         images smaller than this size are not exported
-  -b BORDER, --border BORDER
-                        border size for parts alpha channel
+  -b alpha_spread, --alpha_spread alpha_spread
+                        alpha_spread size for parts alpha channel
 """
 
 #  参考 https://emotionexplorer.blog.fc2.com/blog-entry-88.html
