@@ -7,16 +7,17 @@ from PIL import Image
 
 
 def split(image_path: Path, output_dir_path: Path, prefix: str,
-          cutout_alpha: int, min_size: Tuple[int, int], alpha_spread: int) -> None:
+          cutout_alpha: int, min_size: Tuple[int, int], alpha_spread: int, padding:int) -> None:
     """
     大きなカラー画像を透明度を元にパーツに分割する
     ※ 透明度を持たない画像はエラーになる
     :param image_path: 入力画像ファイルパス
     :param output_dir_path: 出力ディレクトリパス
-    :param prefix: 出力ファイル名のプレフィックス
+    :param prefix: 出力パーツのファイル名のプレフィックス
     :param cutout_alpha: 透明度の閾値(0~255)。この値以下の透明度はパーツ出力時に0にする
     :param min_size: 出力するパーツの最小サイズ これ以下のパーツは出力されない
-    :param alpha_spread: パーツの透明度の境界線の太さ 太くすると近くに配置されたパーツがくっつく
+    :param alpha_spread: 入力画像のパーツの不透明美便を拡張する太さ 太くすると近くに配置されたパーツがくっつく
+    :param padding: 出力するパーツおのおのの余白サイズ
     """
     # MEMO: cv2は透明度のある画像をch所苦節扱えないようなのでPILも併用している
     col_image: Image = Image.open(image_path)
@@ -38,8 +39,8 @@ def split(image_path: Path, output_dir_path: Path, prefix: str,
         # 透明度の境界線を太くする
         alpha_channel = cv2.drawContours(alpha_channel, contours, -1, (255, 255, 255), alpha_spread)
         contours, hierarchy = cv2.findContours(alpha_channel, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.imshow('alpha_channel', alpha_channel)
-    cv2.waitKey(0)
+    # cv2.imshow('alpha_channel', alpha_channel)
+    # cv2.waitKey(0)
     index: int = 0
     cnt: int = 0
     skip_cnt: int = 0
@@ -76,7 +77,10 @@ def split(image_path: Path, output_dir_path: Path, prefix: str,
                             new_alpha = 0
                         parts_img[yy, xx, 3] = new_alpha
             print(f'output #{cnt + skip_cnt} / {len(contours)} : {prefix}{cnt:03d}.png'
-                  f' ({parts_width}x{parts_height})')
+                  f' ({parts_width}x{parts_height} @ {min_x},{min_y})')
+            if padding > 0:
+                parts_img = cv2.copyMakeBorder(parts_img, padding, padding, padding, padding, cv2.BORDER_CONSTANT,
+                                               value=(0, 0, 0, 0))
             Image.fromarray(parts_img).save((output_dir_path / f'{prefix}{cnt:03d}.png').as_posix())
             cnt += 1
         node: List[int] = h0[index]
@@ -101,6 +105,8 @@ def main():
                         help='images smaller than this size are not exported')
     parser.add_argument('-as', '--alpha_spread', type=int, default=0,
                         help='Spread px size for parts alpha channel, it makes parts boundary bigger.')
+    parser.add_argument('-mg', '--padding', type=int, default=0,
+                        help='padding px size for exported parts.')
     args = parser.parse_args()
 
     src_image_path: Path = Path(args.src_image)
@@ -117,8 +123,12 @@ def main():
     cutout_alpha: int = args.cutout_alpha
     assert 0 <= cutout_alpha <= 255, f'cutout_alpha must be 0~255: {cutout_alpha}'
     min_size: Tuple[int, int] = args.min_size
+    assert 0 <= min_size[0] and 0 <= min_size[1], f'min_size must be 0~: {min_size}'
     alpha_spread: int = args.alpha_spread
-    split(src_image_path, output_dir_path, prefix, cutout_alpha, min_size, alpha_spread)
+    assert 0 <= alpha_spread, f'alpha_spread must be 0~: {alpha_spread}'
+    padding: int = args.padding
+    assert 0 <= padding, f'padding must be 0~: {padding}'
+    split(src_image_path, output_dir_path, prefix, cutout_alpha, min_size, alpha_spread, padding)
 
 
 if __name__ == '__main__':
