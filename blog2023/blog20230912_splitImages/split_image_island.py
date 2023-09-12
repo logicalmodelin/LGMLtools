@@ -7,7 +7,8 @@ from PIL import Image
 
 
 def split(image_path: Path, output_dir_path: Path, prefix: str,
-          cutout_alpha: int, min_size: Tuple[int, int], alpha_spread: int, padding:int) -> None:
+          cutout_alpha: int, min_size: Tuple[int, int], alpha_spread: int, padding: int,
+          save_report_image: bool = False) -> None:
     """
     大きなカラー画像を透明度を元にパーツに分割する
     ※ 透明度を持たない画像はエラーになる
@@ -18,6 +19,7 @@ def split(image_path: Path, output_dir_path: Path, prefix: str,
     :param min_size: 出力するパーツの最小サイズ これ以下のパーツは出力されない
     :param alpha_spread: 入力画像のパーツの不透明美便を拡張する太さ 太くすると近くに配置されたパーツがくっつく
     :param padding: 出力するパーツおのおのの余白サイズ
+    :param save_report_image: レポート画像を保存する
     """
     # MEMO: cv2は透明度のある画像をch所苦節扱えないようなのでPILも併用している
     col_image: Image = Image.open(image_path)
@@ -39,8 +41,13 @@ def split(image_path: Path, output_dir_path: Path, prefix: str,
         # 透明度の境界線を太くする
         alpha_channel = cv2.drawContours(alpha_channel, contours, -1, (255, 255, 255), alpha_spread)
         contours, hierarchy = cv2.findContours(alpha_channel, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    # cv2.imshow('alpha_channel', alpha_channel)
-    # cv2.waitKey(0)
+    if save_report_image:
+        # レポート画像を表示する
+        report_image: np.ndarray = np.empty((height, width, 4), dtype=np.uint8)
+        report_image[..., 0:3] = buf[..., 0:3]
+        report_image[..., 3] = alpha_channel
+        report_image = cv2.drawContours(report_image, contours, -1, (255, 0, 0, 255), 8)
+        Image.fromarray(report_image).save((output_dir_path / f'{prefix}@report.png').as_posix())
     index: int = 0
     cnt: int = 0
     skip_cnt: int = 0
@@ -107,6 +114,7 @@ def main():
                         help='Spread px size for parts alpha channel, it makes parts boundary bigger.')
     parser.add_argument('-mg', '--padding', type=int, default=0,
                         help='padding px size for exported parts.')
+    parser.add_argument('--save_report_image',  action="store_true", help='save report image including contours.')
     args = parser.parse_args()
 
     src_image_path: Path = Path(args.src_image)
@@ -128,7 +136,8 @@ def main():
     assert 0 <= alpha_spread, f'alpha_spread must be 0~: {alpha_spread}'
     padding: int = args.padding
     assert 0 <= padding, f'padding must be 0~: {padding}'
-    split(src_image_path, output_dir_path, prefix, cutout_alpha, min_size, alpha_spread, padding)
+    save_report_image: bool = args.save_report_image
+    split(src_image_path, output_dir_path, prefix, cutout_alpha, min_size, alpha_spread, padding, save_report_image)
 
 
 if __name__ == '__main__':
