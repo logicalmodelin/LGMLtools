@@ -144,12 +144,7 @@ if __name__ == '__main__':
     main()
 
 """
-python .\split_image_island.py .\images\test.png -o .\out\ -ms 100 100 --alpha_spread 10 --create_subdir
-
---
-
-usage: split_image_island.py [-h] [-o OUTPUT_DIR] [--create_subdir] [-ca CUTOUT_ALPHA]
-    [-ms MIN_SIZE MIN_SIZE] [-b alpha_spread] src_image
+usage: split_image_island.py [-h] [-o OUTPUT_DIR] [--create_subdir] [-ca CUTOUT_ALPHA] [-ms MIN_SIZE MIN_SIZE] [-as ALPHA_SPREAD] [-mg PADDING] [--save_report_image] src_image
 
 positional arguments:
   src_image             source image file path
@@ -163,8 +158,11 @@ options:
                         cutout alpha threshold(0~255) for final image
   -ms MIN_SIZE MIN_SIZE, --min_size MIN_SIZE MIN_SIZE
                         images smaller than this size are not exported
-  -b alpha_spread, --alpha_spread alpha_spread
-                        alpha_spread size for parts alpha channel
+  -as ALPHA_SPREAD, --alpha_spread ALPHA_SPREAD
+                        Spread px size for parts alpha channel, it makes parts boundary bigger.
+  -mg PADDING, --padding PADDING
+                        padding px size for exported parts.
+  --save_report_image   save report image including contours.
 """
 
 #  参考 https://emotionexplorer.blog.fc2.com/blog-entry-88.html
