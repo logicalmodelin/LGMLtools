@@ -140,4 +140,9 @@ render
 backup
 **/*WIP*
 
+*.painter_lock
+*.blend?*
+
+
+
 
