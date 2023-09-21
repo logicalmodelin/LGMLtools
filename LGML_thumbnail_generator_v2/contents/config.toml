@@ -3,5 +3,5 @@ title = "Substance\nDesigner"
 description = ".sbsarファイルの7z圧縮を解凍して\n内容を直接いじってみる"
 output_image_size = [640, 427]
 output_dir = "../out"
-output_file_name = "image.jpg"
+output_file_name = "image.png"
 work_dir = "../work"

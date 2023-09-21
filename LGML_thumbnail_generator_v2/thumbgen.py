@@ -7,8 +7,8 @@ from typing import List, Dict, Tuple, Any
 import tempfile
 import json
 from datetime import datetime
-import codecs
 import subprocess
+from PIL import Image
 
 CONTENT_ASSETS_REQUIRED: List[str] = [
     "config.toml",
@@ -85,9 +85,8 @@ class Config:
 
     def create_json_obj(self) -> Dict[str, Any]:
         return {
-            # \u3048 みたいになっているエスケープ文字列をデコードする
-            "title": codecs.decode(self.title, 'unicode-escape'),
-            "description": codecs.decode(self.description, 'unicode-escape'),
+            "title": self.title,
+            "description": self.description,
         }
 
 
@@ -95,10 +94,10 @@ def _export(work_dir_path: Path, config: Config):
     output_file_path: Path = config.output_file_path
     output_image_size: Tuple[int, int] = config.output_image_size
     commands: List[str] = [
-        f'"C:/Program Files/Adobe/Adobe After Effects {config.ae_version}/Support Files/afterfx"',
-        # '-s',
-        # f'"var file = new File(\'{work_dir_path.as_posix()}/template.aep\');'
-        # f'app.open(file);app.project.renderQueue.render();"',
+        f'C:/Program Files/Adobe/Adobe After Effects {config.ae_version}/Support Files/afterfx',
+        '-s',
+        f'var file = new File(\'{work_dir_path.as_posix()}/template.aep\');'
+        f'app.open(file);app.project.renderQueue.render();',
         '-noui',
     ]
     print(commands)
@@ -131,8 +130,8 @@ def main():
 
     # config json の作成 上書きOK
     o:  Dict[str, Any] = config.create_json_obj()
-    with open((work_dir_path / "info.json").as_posix(), "w") as fp:
-        json.dump(o, fp)
+    with open((work_dir_path / "info.json").as_posix(), "w", encoding="utf-8") as fp:
+        json.dump(o, fp, indent=4, ensure_ascii=False)
 
     # bg.png のコピー 上書きOK
     shutil.copyfile(content_dir_path / "bg.png", (work_dir_path / "bg.png").as_posix())
@@ -155,10 +154,19 @@ def main():
     _export(work_dir_path, config)  # TODO FIX
     if temp_dir_path is not None:
         temp_dir_path.cleanup()
-    export_image_path: Path = work_dir_path / "image.png"
+    export_image_path: Path = work_dir_path / "image_00000.png"
     assert export_image_path.exists(), "画像が出力されていません"
-    # TODO resize
-    # TODO jpg?
+
+    # リサイズとフォーマット変換しつつ出力フォルダにコピー
+    im = Image.open(export_image_path)
+    if config.output_image_size[0] > 0 and config.output_image_size[1] > 0:
+        # 本当は LGMLImageSizeAdjuster.py を使いたい
+        im = im.resize(config.output_image_size)
+    if config.output_file_path.suffix == ".jpg":
+        im = im.convert("RGB")
+    if config.output_file_path.exists():
+        config.output_file_path.unlink()
+    im.save(config.output_file_path.as_posix())
 
 
 if __name__ == "__main__":

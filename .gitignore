@@ -142,6 +142,7 @@ backup
 
 *.painter_lock
 *.blend?*
+out/
 
 
 
