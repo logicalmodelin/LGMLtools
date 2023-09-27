@@ -1,0 +1,7 @@
+template_dir = "../../templates/substance_painter001"
+title = "Substance\nPainter"
+description = "グレースケール generic フィルタ\n作成時の注意"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "image.png"
+work_dir = "../../work"
