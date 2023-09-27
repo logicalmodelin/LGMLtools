@@ -135,6 +135,7 @@ dmypy.json
 ~*
 *.tmp
 *.bak
+*.lnk
 gist/*
 render
 backup
