@@ -143,6 +143,8 @@ backup
 
 *.painter_lock
 *.blend?*
+*_autosave_*.spp
+*.spp.painter_lock
 out/
 
 

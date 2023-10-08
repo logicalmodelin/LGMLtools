@@ -3,5 +3,5 @@ title = "Substance\nPainter"
 description = "SDFテクスチャフィルター"
 output_image_size = [640, 427]
 output_dir = "../../out"
-output_file_name = "image.png"
+output_file_name = "blog20231008.png"
 work_dir = "../../work"
