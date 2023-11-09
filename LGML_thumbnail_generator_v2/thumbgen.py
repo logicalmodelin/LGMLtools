@@ -34,7 +34,7 @@ class Config:
     output_image_size: Tuple[int, int]
     output_file_path: Path
     work_dir_path: Path | None
-    ae_version: str = "2023"
+    ae_version: str = "2024"
 
     def __init__(self, config_toml_path: Path):
         config_toml_path = config_toml_path.absolute()
@@ -90,11 +90,18 @@ class Config:
         }
 
 
+def _get_afterfx_path(ae_version: str) -> Path:
+    return Path(f"C:/Program Files/Adobe/Adobe After Effects {ae_version}/Support Files/afterfx.exe")
+
+
 def _export(work_dir_path: Path, config: Config):
     output_file_path: Path = config.output_file_path
     output_image_size: Tuple[int, int] = config.output_image_size
+    ae_path: Path = _get_afterfx_path(config.ae_version)
+    if not ae_path.exists():
+        raise Exception(f"Adobe After Effects {config.ae_version} がインストールされていません")
     commands: List[str] = [
-        f'C:/Program Files/Adobe/Adobe After Effects {config.ae_version}/Support Files/afterfx',
+        _get_afterfx_path(config.ae_version).as_posix(),
         '-s',
         f'var file = new File(\'{work_dir_path.as_posix()}/template.aep\');'
         f'app.open(file);app.project.renderQueue.render();',
