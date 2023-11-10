@@ -1,0 +1,7 @@
+template_dir = "../../templates/substance_designer001"
+title = "Substance\nDesigner"
+description = "いらすとやぽい加工"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231109B.png"
+work_dir = "../../work"
