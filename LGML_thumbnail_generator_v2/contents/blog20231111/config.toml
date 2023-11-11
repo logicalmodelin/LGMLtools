@@ -1,0 +1,7 @@
+template_dir = "../../templates/substance_designer001"
+title = "Substance\nDesigner"
+description = "更新-いらすと作成に\n便利なノード"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231109B.png"
+work_dir = "../../work"
