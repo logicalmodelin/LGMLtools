@@ -1,0 +1,7 @@
+template_dir = "../../templates/illustrator001"
+title = "Adobe\nIllustrator"
+description = "ベタ塗り絵を線画化"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231117.png"
+work_dir = "../../work"
