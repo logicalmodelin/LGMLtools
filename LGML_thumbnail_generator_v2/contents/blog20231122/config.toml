@@ -1,0 +1,7 @@
+template_dir = "../../templates/Animate001"
+title = "Adobe\nAnimate"
+description = "ベタ塗り絵を線画化"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231122.png"
+work_dir = "../../work"
