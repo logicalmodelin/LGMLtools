@@ -1,0 +1,7 @@
+template_dir = "../../templates/aftereffects001"
+title = "Adobe\nAfterEffects"
+description = "エクスプレッションで\nキャラの向きを自動制御"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231123B.png"
+work_dir = "../../work"

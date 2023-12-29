@@ -1,0 +1,7 @@
+template_dir = "../../templates/aftereffects001"
+title = "Adobe\nAfterEffects"
+description = "レンダリングのtips"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231123C.png"
+work_dir = "../../work"

@@ -1,0 +1,7 @@
+template_dir = "../../templates/blender001"
+title = "Blender"
+description = "一括ラティス変形"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231230.png"
+work_dir = "../../work"

@@ -1,0 +1,7 @@
+template_dir = "../../templates/aftereffects001"
+title = "Adobe\nAfterEffects"
+description = "グリッドに吸着して動かす"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231124.png"
+work_dir = "../../work"

@@ -1,0 +1,7 @@
+template_dir = "../../templates/aftereffects001"
+title = "Adobe\nAfterEffects"
+description = "ループスクロールルーチン"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231126.png"
+work_dir = "../../work"

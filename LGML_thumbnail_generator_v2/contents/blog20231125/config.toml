@@ -1,0 +1,7 @@
+template_dir = "../../templates/aftereffects001"
+title = "Adobe\nAfterEffects"
+description = "１つのjsx関数でレイヤー\nごとの振る舞いを変える"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20231125.png"
+work_dir = "../../work"
