@@ -91,7 +91,8 @@ class Config:
 
 
 def _get_afterfx_path(ae_version: str) -> Path:
-    return Path(f"C:/Program Files/Adobe/Adobe After Effects {ae_version}/Support Files/afterfx.exe")
+    # return Path(f"C:/Program Files/Adobe/Adobe After Effects {ae_version}/Support Files/afterfx.exe")
+    return Path(f"D:/adobeApps/Adobe After Effects {ae_version}/Support Files/afterfx.exe")
 
 
 def _export(work_dir_path: Path, config: Config):
