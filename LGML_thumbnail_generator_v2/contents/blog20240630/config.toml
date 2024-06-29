@@ -1,0 +1,7 @@
+template_dir = "../../templates/substance_designer001"
+title = "Substance\nDesigner"
+description = "ハイトマップから等高線を作る"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20240630.png"
+work_dir = "../../work"
