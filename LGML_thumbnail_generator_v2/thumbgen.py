@@ -34,7 +34,7 @@ class Config:
     output_image_size: Tuple[int, int]
     output_file_path: Path
     work_dir_path: Path | None
-    ae_version: str = "2024"
+    ae_version: str = "2025"
 
     def __init__(self, config_toml_path: Path):
         config_toml_path = config_toml_path.absolute()
