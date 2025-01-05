@@ -1,0 +1,7 @@
+template_dir = "../../templates/shell_script001"
+title = "PowerShell"
+description = "バックアップblendファイルを一括削除"
+output_image_size = [640, 427]
+output_dir = "../../out"
+output_file_name = "blog20250105.png"
+work_dir = "../../work"
